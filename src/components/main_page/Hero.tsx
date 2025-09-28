@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 export default function Hero() {
   return (
     <main style={{
@@ -26,18 +28,20 @@ export default function Hero() {
         чтобы команда синхронизировалась по всем задачам.
       </p>
 
-      <button style={{
-        backgroundColor: '#007bff',
-        color: 'white',
-        padding: '15px 30px',
-        border: 'none',
-        borderRadius: '8px',
-        fontSize: '18px',
-        cursor: 'pointer',
-        fontWeight: 'bold'
-      }}>
-        Начать работу
-      </button>
+      <Link href='/register' style={{textDecoration: 'none' }}>
+        <button style={{
+          backgroundColor: '#007bff',
+          color: 'white',
+          padding: '15px 30px',
+          border: 'none',
+          borderRadius: '8px',
+          fontSize: '18px',
+          cursor: 'pointer',
+          fontWeight: 'bold'
+        }}>
+          Начать работу
+        </button>
+      </Link>
     </main>
   )
 }

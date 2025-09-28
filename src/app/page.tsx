@@ -1,7 +1,7 @@
-import Header from '@/components/Header'
-import Hero from '@/components/Hero'
-import Features from '@/components/Features'
-import Footer from '@/components/Footer'
+import Header from '@/components/main_page/Header'
+import Hero from '@/components/main_page/Hero'
+import Features from '@/components/main_page/Features'
+import Footer from '@/components/main_page/Footer'
 
 export default function MainPage() {
   return (

@@ -2,13 +2,17 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 export default function Register() {
+  const router = useRouter()
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: ''
   })
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -17,10 +21,36 @@ export default function Register() {
     })
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('Данные регистрации:', formData)
-    // Здесь будет логика отправки данных
+    setError('')
+    setLoading(true)
+
+    try {
+      const response = await fetch('/api/user/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setError(data.error || 'Ошибка регистрации')
+        return
+      }
+
+      // Успешная регистрация
+      alert('Регистрация успешна!')
+      router.push('/')
+      
+    } catch (err) {
+      setError('Ошибка подключения к серверу')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -32,7 +62,6 @@ export default function Register() {
       padding: '40px 20px',
       backgroundColor: '#f5f5f5'
     }}>
-      {/* Белая карточка с формой */}
       <div style={{
         color: '#333',
         backgroundColor: 'white',
@@ -42,7 +71,6 @@ export default function Register() {
         width: '100%',
         maxWidth: '400px'
       }}>
-        {/* Заголовок */}
         <h1 style={{
           fontSize: '28px',
           fontWeight: 'bold',
@@ -53,7 +81,6 @@ export default function Register() {
           Создайте аккаунт
         </h1>
 
-        {/* Описание */}
         <p style={{
           fontSize: '16px',
           color: '#666',
@@ -65,9 +92,21 @@ export default function Register() {
           совместной работы.
         </p>
 
-        {/* Форма */}
+        {error && (
+          <div style={{
+            backgroundColor: '#fee',
+            color: '#c33',
+            padding: '12px',
+            borderRadius: '8px',
+            marginBottom: '16px',
+            textAlign: 'center',
+            fontSize: '14px'
+          }}>
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
-          {/* Поле имени */}
           <div style={{ marginBottom: '16px' }}>
             <input
               type="text"
@@ -76,13 +115,14 @@ export default function Register() {
               value={formData.name}
               onChange={handleChange}
               required
+              disabled={loading}
               style={{
                 width: '100%',
                 padding: '12px 16px',
                 border: '1px solid #e1e5e9',
                 borderRadius: '8px',
                 fontSize: '16px',
-                backgroundColor: '#f8f9fa',
+                backgroundColor: loading ? '#f0f0f0' : '#f8f9fa',
                 outline: 'none',
                 transition: 'border-color 0.2s'
               }}
@@ -91,7 +131,6 @@ export default function Register() {
             />
           </div>
 
-          {/* Поле email */}
           <div style={{ marginBottom: '16px' }}>
             <input
               type="email"
@@ -100,13 +139,14 @@ export default function Register() {
               value={formData.email}
               onChange={handleChange}
               required
+              disabled={loading}
               style={{
                 width: '100%',
                 padding: '12px 16px',
                 border: '1px solid #e1e5e9',
                 borderRadius: '8px',
                 fontSize: '16px',
-                backgroundColor: '#f8f9fa',
+                backgroundColor: loading ? '#f0f0f0' : '#f8f9fa',
                 outline: 'none',
                 transition: 'border-color 0.2s'
               }}
@@ -115,22 +155,23 @@ export default function Register() {
             />
           </div>
 
-          {/* Поле пароля */}
           <div style={{ marginBottom: '24px' }}>
             <input
               type="password"
               name="password"
-              placeholder="Пароль"
+              placeholder="Пароль (минимум 6 символов)"
               value={formData.password}
               onChange={handleChange}
               required
+              minLength={6}
+              disabled={loading}
               style={{
                 width: '100%',
                 padding: '12px 16px',
                 border: '1px solid #e1e5e9',
                 borderRadius: '8px',
                 fontSize: '16px',
-                backgroundColor: '#f8f9fa',
+                backgroundColor: loading ? '#f0f0f0' : '#f8f9fa',
                 outline: 'none',
                 transition: 'border-color 0.2s'
               }}
@@ -139,29 +180,32 @@ export default function Register() {
             />
           </div>
 
-          {/* Кнопка регистрации */}
           <button
             type="submit"
+            disabled={loading}
             style={{
               width: '100%',
               padding: '14px',
-              backgroundColor: '#007bff',
+              backgroundColor: loading ? '#ccc' : '#007bff',
               color: 'white',
               border: 'none',
               borderRadius: '8px',
               fontSize: '16px',
               fontWeight: '600',
-              cursor: 'pointer',
+              cursor: loading ? 'not-allowed' : 'pointer',
               transition: 'background-color 0.2s'
             }}
-            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#0056b3'}
-            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#007bff'}
+            onMouseOver={(e) => {
+              if (!loading) e.currentTarget.style.backgroundColor = '#0056b3'
+            }}
+            onMouseOut={(e) => {
+              if (!loading) e.currentTarget.style.backgroundColor = '#007bff'
+            }}
           >
-            Зарегистрироваться
+            {loading ? 'Регистрация...' : 'Зарегистрироваться'}
           </button>
         </form>
 
-        {/* Ссылка на вход */}
         <p style={{
           textAlign: 'center',
           marginTop: '20px',

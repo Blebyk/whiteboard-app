@@ -36,7 +36,7 @@ export default function Header() {
           </button>
         </Link>
 
-        <Link href='/Register' style={{ textDecoration: 'none' }}>
+        <Link href='/register' style={{ textDecoration: 'none' }}>
           <button style={{
             backgroundColor: '#28a745',
             color: 'white',

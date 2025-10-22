@@ -1,36 +1,171 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Whiteboard
 
-## Getting Started
+Веб-приложение для создания и организации заметок на виртуальной доске с возможностью совместной работы.
 
-First, run the development server:
+## Описание проекта
+
+Whiteboard - это современное приложение для организации идей и заметок. Проект построен на Next.js с использованием TypeScript и React.
+
+## Технологии
+
+- **Next.js** - React фреймворк для production
+- **React** - библиотека для построения UI
+- **TypeScript** - типизированный JavaScript
+- **Tailwind CSS** - utility-first CSS фреймворк
+
+## Требования
+
+Перед началом работы убедитесь, что у вас установлено:
+
+- **Node.js** версии 18.17 или выше ([скачать](https://nodejs.org/))
+- **npm** (устанавливается вместе с Node.js) или **yarn**
+
+## Установка
+
+1. **Клонируйте репозиторий или скачайте исходный код**
+
+```bash
+git clone <url-репозитория>
+cd whiteboard
+```
+
+2. **Установите зависимости**
+
+Используя npm:
+```bash
+npm install
+```
+
+Или используя yarn:
+```bash
+yarn install
+```
+
+## Запуск проекта
+
+### Режим разработки
+
+Для запуска проекта в режиме разработки:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+или
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+yarn dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Приложение будет доступно по адресу: **http://localhost:3000**
 
-## Learn More
+### Production сборка
 
-To learn more about Next.js, take a look at the following resources:
+Для создания оптимизированной production сборки:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run build
+npm run start
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+или
 
-## Deploy on Vercel
+```bash
+yarn build
+yarn start
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Структура проекта
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+whiteboard/
+├── app/                          # Директория приложения Next.js
+│   ├── layout.tsx               # Корневой layout
+│   ├── page.tsx                 # Главная страница
+│   ├── globals.css              # Глобальные стили
+│   └── register/                # Страница регистрации
+│       └── page.tsx
+├── components/                   # React компоненты
+│   ├── main_page/               # Компоненты главной страницы
+│   │   ├── Header.tsx
+│   │   ├── Hero.tsx
+│   │   ├── Features.tsx
+│   │   ├── FeatureCard.tsx
+│   │   └── Footer.tsx
+│   └── registration_page/       # Компоненты страницы регистрации
+│       ├── Header.tsx
+│       ├── Register.tsx
+│       ├── RegistrationForm.tsx
+│       └── Footer.tsx
+├── public/                      # Статические файлы
+├── package.json                 # Зависимости проекта
+└── README.md                    # Этот файл
+```
+
+## Доступные страницы
+
+- **/** - Главная страница с описанием возможностей
+- **/register** - Страница регистрации нового пользователя
+
+## Разработка
+
+### Основные команды
+
+```bash
+# Запуск в режиме разработки
+npm run dev
+
+# Сборка проекта
+npm run build
+
+# Запуск production версии
+npm run start
+
+# Проверка линтером
+npm run lint
+```
+
+## Возможности
+
+- ✅ Создание и организация заметок
+- ✅ Группировка идей по категориям
+- ✅ Быстрый доступ к информации
+- ✅ Регистрация пользователей
+- ✅ Адаптивный дизайн
+
+## Устранение проблем
+
+### Ошибка при запуске
+
+Если возникает ошибка при запуске, попробуйте:
+
+1. Удалить папки `node_modules` и `.next`:
+```bash
+rm -rf node_modules .next
+```
+
+2. Переустановить зависимости:
+```bash
+npm install
+```
+
+3. Запустить проект снова:
+```bash
+npm run dev
+```
+
+### Порт уже занят
+
+Если порт 3000 уже используется, вы можете запустить на другом порту:
+
+```bash
+npm run dev -- -p 3001
+```
+
+## Лицензия
+
+© 2025 Whiteboard. Все права защищены.
+
+## Контакты
+
+Если у вас есть вопросы или предложения, свяжитесь с нами через форму обратной связи на сайте.

@@ -13,6 +13,7 @@ export default function Register() {
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [success, setSuccess] = useState(false)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -43,8 +44,7 @@ export default function Register() {
       }
 
       // Успешная регистрация
-      alert('Регистрация успешна!')
-      router.push('/')
+      setSuccess(true)
       
     } catch (err) {
       setError('Ошибка подключения к серверу')
@@ -71,26 +71,119 @@ export default function Register() {
         width: '100%',
         maxWidth: '400px'
       }}>
-        <h1 style={{
-          fontSize: '28px',
-          fontWeight: 'bold',
-          color: '#333',
-          textAlign: 'center',
-          marginBottom: '8px'
-        }}>
-          Создайте аккаунт
-        </h1>
+        {success ? (
+          // Success State
+          <div style={{ textAlign: 'center' }}>
+            <div style={{
+              fontSize: '64px',
+              marginBottom: '20px',
+              animation: 'fadeIn 0.5s ease-in'
+            }}>
+              ✉️
+            </div>
 
-        <p style={{
-          fontSize: '16px',
-          color: '#666',
-          textAlign: 'center',
-          marginBottom: '30px',
-          lineHeight: '1.5'
-        }}>
-          Быстрая и простая регистрация для<br />
-          совместной работы.
-        </p>
+            <h1 style={{
+              fontSize: '28px',
+              fontWeight: 'bold',
+              color: '#28a745',
+              marginBottom: '16px'
+            }}>
+              Проверьте ваш email
+            </h1>
+
+            <p style={{
+              fontSize: '16px',
+              color: '#666',
+              lineHeight: '1.6',
+              marginBottom: '24px'
+            }}>
+              Мы отправили письмо с подтверждением на<br />
+              <strong style={{ color: '#333' }}>{formData.email}</strong>
+            </p>
+
+            <div style={{
+              backgroundColor: '#e8f5e9',
+              padding: '16px',
+              borderRadius: '8px',
+              marginBottom: '24px',
+              fontSize: '14px',
+              color: '#2e7d32',
+              lineHeight: '1.5'
+            }}>
+              Перейдите по ссылке в письме для завершения регистрации.
+              Письмо действительно 24 часа.
+            </div>
+
+            <button
+              onClick={() => router.push('/')}
+              style={{
+                width: '100%',
+                padding: '14px',
+                backgroundColor: '#007bff',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '16px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'background-color 0.2s',
+                marginBottom: '12px'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#0056b3'}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#007bff'}
+            >
+              Вернуться на главную
+            </button>
+
+            <button
+              onClick={() => setSuccess(false)}
+              style={{
+                width: '100%',
+                padding: '14px',
+                backgroundColor: 'transparent',
+                color: '#666',
+                border: '1px solid #ddd',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = '#f5f5f5'
+                e.currentTarget.style.borderColor = '#999'
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent'
+                e.currentTarget.style.borderColor = '#ddd'
+              }}
+            >
+              Не получили письмо?
+            </button>
+          </div>
+        ) : (
+          // Registration Form
+          <>
+            <h1 style={{
+              fontSize: '28px',
+              fontWeight: 'bold',
+              color: '#333',
+              textAlign: 'center',
+              marginBottom: '8px'
+            }}>
+              Создайте аккаунт
+            </h1>
+
+            <p style={{
+              fontSize: '16px',
+              color: '#666',
+              textAlign: 'center',
+              marginBottom: '30px',
+              lineHeight: '1.5'
+            }}>
+              Быстрая и простая регистрация для<br />
+              совместной работы.
+            </p>
 
         {error && (
           <div style={{
@@ -206,24 +299,26 @@ export default function Register() {
           </button>
         </form>
 
-        <p style={{
-          textAlign: 'center',
-          marginTop: '20px',
-          fontSize: '14px',
-          color: '#666'
-        }}>
-          Уже есть аккаунт?{' '}
-          <Link 
-            href="/login"
-            style={{
-              color: '#007bff',
-              textDecoration: 'none',
-              fontWeight: '500'
-            }}
-          >
-            Войти
-          </Link>
-        </p>
+            <p style={{
+              textAlign: 'center',
+              marginTop: '20px',
+              fontSize: '14px',
+              color: '#666'
+            }}>
+              Уже есть аккаунт?{' '}
+              <Link
+                href="/login"
+                style={{
+                  color: '#007bff',
+                  textDecoration: 'none',
+                  fontWeight: '500'
+                }}
+              >
+                Войти
+              </Link>
+            </p>
+          </>
+        )}
       </div>
     </main>
   )

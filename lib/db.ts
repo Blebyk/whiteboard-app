@@ -10,6 +10,9 @@ db.exec(`
     name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
+    emailVerified INTEGER DEFAULT 0,
+    verificationToken TEXT,
+    tokenExpiry DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )
 `);

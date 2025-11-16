@@ -1,5 +1,7 @@
+// Секция с основными возможностями приложения
 import FeatureCard from './FeatureCard'
 
+// Компонент отображает сетку из карточек функционала
 export default function Features() {
   return (
     <section style={{

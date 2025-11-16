@@ -1,6 +1,8 @@
+// API эндпоинт для верификации email пользователя через токен
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/../lib/db';
 
+// Интерфейс пользователя из БД
 interface User {
   id: number;
   name: string;
@@ -12,6 +14,7 @@ interface User {
   created_at: string;
 }
 
+// GET запрос для подтверждения email по токену из ссылки
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);

@@ -1,5 +1,7 @@
+// Главный блок с приветствием и призывом к действию
 import Link from 'next/link'
 
+// Компонент Hero секции с заголовком и CTA кнопкой
 export default function Hero() {
   return (
     <main style={{

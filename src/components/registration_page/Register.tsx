@@ -1,3 +1,4 @@
+// Форма регистрации пользователя с валидацией и отправкой на API
 'use client'
 
 import { useState } from 'react'
@@ -6,6 +7,8 @@ import { useRouter } from 'next/navigation'
 
 export default function Register() {
   const router = useRouter()
+
+  // Состояние формы с данными пользователя
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -15,6 +18,7 @@ export default function Register() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
 
+  // Обработчик изменения полей формы
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
       ...formData,
@@ -22,6 +26,7 @@ export default function Register() {
     })
   }
 
+  // Отправка формы регистрации на API
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')

@@ -1,3 +1,4 @@
+// Подвал главной страницы с копирайтом
 export default function Footer() {
   return (
     <footer style={{

@@ -1,10 +1,11 @@
-// Путь: src/app/api/auth/register/route.ts
+// API эндпоинт для регистрации новых пользователей
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/../lib/db';
 import bcrypt from 'bcryptjs';
 import { Resend } from 'resend';
 import crypto from 'crypto';
 
+// POST запрос для регистрации пользователя с отправкой email верификации
 export async function POST(request: NextRequest) {
   try {
     const { name, email, password } = await request.json();

@@ -1,8 +1,10 @@
+// Карточка с описанием функции приложения
 interface FeatureCardProps {
   title: string;
   description: string;
 }
 
+// Компонент карточки для отображения функционала на главной странице
 export default function FeatureCard({ title, description }: FeatureCardProps) {
   return (
     <div style={{

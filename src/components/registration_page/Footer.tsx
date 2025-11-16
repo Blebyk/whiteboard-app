@@ -1,3 +1,4 @@
+// Подвал страницы регистрации
 export default function Footer() {
   return (
     <footer style={{

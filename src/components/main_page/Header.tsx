@@ -1,5 +1,7 @@
+// Шапка главной страницы с навигацией
 import Link from 'next/link'
 
+// Компонент с логотипом и кнопками входа/регистрации
 export default function Header() {
   return (
     <header style={{

@@ -1,5 +1,7 @@
+// Шапка страницы регистрации с навигацией
 import Link from 'next/link'
 
+// Компонент с логотипом и кнопками навигации
 export default function Header() {
   return (
     <header style={{

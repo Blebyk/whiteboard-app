@@ -1,171 +1,91 @@
 # Whiteboard
 
-Веб-приложение для создания и организации заметок на виртуальной доске с возможностью совместной работы.
+Веб-приложение для создания заметок с системой регистрации и email-верификацией.
 
-## Описание проекта
+## Дизайн
 
-Whiteboard - это современное приложение для организации идей и заметок. Проект построен на Next.js с использованием TypeScript и React.
+[Figma макет проекта](https://www.figma.com/design/5KZ30KFAP4z7pGsQs9FkeN/Untitled?node-id=0-1&t=OMim40eyzJilbrZ3-1)
 
 ## Технологии
 
-- **Next.js** - React фреймворк для production
-- **React** - библиотека для построения UI
-- **TypeScript** - типизированный JavaScript
-- **Tailwind CSS** - utility-first CSS фреймворк
-
-## Требования
-
-Перед началом работы убедитесь, что у вас установлено:
-
-- **Node.js** версии 18.17 или выше ([скачать](https://nodejs.org/))
-- **npm** (устанавливается вместе с Node.js) или **yarn**
+- **Next.js 15** - React фреймворк
+- **TypeScript** - типизация
+- **SQLite** (better-sqlite3) - база данных
+- **bcryptjs** - хеширование паролей
+- **Resend** - отправка email
 
 ## Установка
 
-1. **Клонируйте репозиторий или скачайте исходный код**
-
-```bash
-git clone <url-репозитория>
-cd whiteboard
-```
-
-2. **Установите зависимости**
-
-Используя npm:
 ```bash
 npm install
 ```
 
-Или используя yarn:
-```bash
-yarn install
+## Переменные окружения
+
+Создайте `.env.local` в корне проекта:
+
+```env
+RESEND_API_KEY=your_resend_api_key
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-## Запуск проекта
-
-### Режим разработки
-
-Для запуска проекта в режиме разработки:
+## Запуск
 
 ```bash
+# Разработка
 npm run dev
-```
 
-или
-
-```bash
-yarn dev
-```
-
-Приложение будет доступно по адресу: **http://localhost:3000**
-
-### Production сборка
-
-Для создания оптимизированной production сборки:
-
-```bash
+# Production
 npm run build
-npm run start
-```
-
-или
-
-```bash
-yarn build
-yarn start
+npm start
 ```
 
 ## Структура проекта
 
 ```
 whiteboard/
-├── app/                          # Директория приложения Next.js
-│   ├── layout.tsx               # Корневой layout
-│   ├── page.tsx                 # Главная страница
-│   ├── globals.css              # Глобальные стили
-│   └── register/                # Страница регистрации
-│       └── page.tsx
-├── components/                   # React компоненты
-│   ├── main_page/               # Компоненты главной страницы
-│   │   ├── Header.tsx
-│   │   ├── Hero.tsx
-│   │   ├── Features.tsx
-│   │   ├── FeatureCard.tsx
-│   │   └── Footer.tsx
-│   └── registration_page/       # Компоненты страницы регистрации
-│       ├── Header.tsx
-│       ├── Register.tsx
-│       ├── RegistrationForm.tsx
-│       └── Footer.tsx
-├── public/                      # Статические файлы
-├── package.json                 # Зависимости проекта
-└── README.md                    # Этот файл
+├── src/
+│   ├── app/
+│   │   ├── api/
+│   │   │   ├── auth/verify-email/route.ts    # Верификация email
+│   │   │   └── user/register/route.ts        # Регистрация
+│   │   ├── register/page.tsx                 # Страница регистрации
+│   │   ├── verify-email/page.tsx             # Страница верификации
+│   │   └── page.tsx                          # Главная
+│   └── components/
+│       ├── main_page/                        # Компоненты главной
+│       └── registration_page/                # Компоненты регистрации
+├── lib/
+│   └── db.ts                                 # Конфигурация БД
+└── whiteboard.db                             # SQLite база данных
 ```
 
-## Доступные страницы
+## База данных
 
-- **/** - Главная страница с описанием возможностей
-- **/register** - Страница регистрации нового пользователя
+SQLite БД создается автоматически при первом запуске. Структура таблицы `users`:
 
-## Разработка
+- `id` - PRIMARY KEY
+- `name` - имя пользователя
+- `email` - email (UNIQUE)
+- `password` - хешированный пароль
+- `emailVerified` - статус верификации (0/1)
+- `verificationToken` - одноразовый токен
+- `tokenExpiry` - срок действия токена
+- `created_at` - дата создания
 
-### Основные команды
+## API
 
-```bash
-# Запуск в режиме разработки
-npm run dev
+### POST `/api/user/register`
+Регистрация пользователя с отправкой email
 
-# Сборка проекта
-npm run build
-
-# Запуск production версии
-npm run start
-
-# Проверка линтером
-npm run lint
+**Body:**
+```json
+{
+  "name": "string",
+  "email": "string",
+  "password": "string"
+}
 ```
 
-## Возможности
-
-- ✅ Создание и организация заметок
-- ✅ Группировка идей по категориям
-- ✅ Быстрый доступ к информации
-- ✅ Регистрация пользователей
-- ✅ Адаптивный дизайн
-
-## Устранение проблем
-
-### Ошибка при запуске
-
-Если возникает ошибка при запуске, попробуйте:
-
-1. Удалить папки `node_modules` и `.next`:
-```bash
-rm -rf node_modules .next
-```
-
-2. Переустановить зависимости:
-```bash
-npm install
-```
-
-3. Запустить проект снова:
-```bash
-npm run dev
-```
-
-### Порт уже занят
-
-Если порт 3000 уже используется, вы можете запустить на другом порту:
-
-```bash
-npm run dev -- -p 3001
-```
-
-## Лицензия
-
-© 2025 Whiteboard. Все права защищены.
-
-## Контакты
-
-Если у вас есть вопросы или предложения, свяжитесь с нами через форму обратной связи на сайте.
+### GET `/api/auth/verify-email?token=xxx`
+Подтверждение email по токену из письма

@@ -1,12 +1,19 @@
-// Конфигурация SQLite базы данных
 import Database from 'better-sqlite3';
 import path from 'path';
 
-// Путь к файлу БД в корне проекта
 const dbPath = path.join(process.cwd(), 'whiteboard.db');
-const db = new Database(dbPath);
 
-// Создание таблицы пользователей с полями для email верификации
+// Singleton – reuse the same connection across HMR cycles in dev
+const globalForDb = global as unknown as { _db?: Database.Database };
+if (!globalForDb._db) {
+  globalForDb._db = new Database(dbPath);
+}
+const db = globalForDb._db;
+
+// Enable WAL mode for better concurrent read performance
+db.pragma('journal_mode = WAL');
+
+// Create all tables if they don't exist yet (safe to run on every boot)
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -17,7 +24,27 @@ db.exec(`
     verificationToken TEXT,
     tokenExpiry DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
+  );
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userId INTEGER NOT NULL,
+    token TEXT UNIQUE NOT NULL,
+    expiresAt DATETIME NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS boards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userId INTEGER NOT NULL,
+    name TEXT NOT NULL DEFAULT 'Без названия',
+    canvasState TEXT,
+    thumbnail TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+  );
 `);
 
 export default db;

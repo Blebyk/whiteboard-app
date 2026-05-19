@@ -24,9 +24,9 @@ export default function Header() {
       </Link>
       
       <div>
-        <Link href='/'>
+        <Link href='/login'>
           <button style={{
-            backgroundColor: '#007bff',
+            backgroundColor: '#4f46e5',
             color: 'white',
             padding: '10px 20px',
             border: 'none',

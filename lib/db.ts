@@ -66,4 +66,5 @@ if (!colNames.includes('resetTokenExpiry')) {
   db.exec('ALTER TABLE users ADD COLUMN resetTokenExpiry DATETIME');
 }
 
+
 export default db;

@@ -233,6 +233,7 @@ export default function WhiteboardApp({ boardId, boardName, initialState, initia
           />
         )}
 
+
         <PropertiesPanel
           tool={tool}
           strokeColor={strokeColor}

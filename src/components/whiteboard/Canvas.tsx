@@ -34,6 +34,7 @@ export interface SelectionInfo {
   isMulti: boolean;
 }
 
+
 export interface CanvasRef {
   undo(): void;
   redo(): void;
@@ -181,6 +182,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
   // Middle-mouse pan state (works with any tool)
   const midPanning = useRef(false);
   const midPanStart = useRef({ x: 0, y: 0 });
+
 
   // Background handler ref (for cleanup on style change)
   const bgHandlerRef = useRef<(() => void) | null>(null);
@@ -373,6 +375,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
     let onMidMove: ((e: MouseEvent) => void) | null = null;
     let onMidUp: ((e: MouseEvent) => void) | null = null;
     let onAuxClick: ((e: MouseEvent) => void) | null = null;
+
 
     import('fabric').then(async (fab) => {
       if (aborted) return; // cleanup already ran before promise resolved
@@ -733,6 +736,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
           pRef.current.onSelectionChange(true, getSelectionInfo());
         });
       });
+
 
       // ── Object modified ─────────────────────────────────────
       canvas.on('object:modified', pushHistory);

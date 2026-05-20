@@ -3,6 +3,8 @@ import { getSessionUser } from '@/lib/auth';
 import db from '@/lib/db';
 import WhiteboardApp from '@/components/whiteboard/WhiteboardApp';
 
+export const dynamic = 'force-dynamic';
+
 export default async function BoardPage({
   params,
 }: {

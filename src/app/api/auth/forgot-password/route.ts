@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
       'UPDATE users SET resetToken = ?, resetTokenExpiry = ? WHERE id = ?'
     ).run(resetToken, resetTokenExpiry, user.id);
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
     const resetUrl = `${appUrl}/reset-password?token=${resetToken}`;
 
     const resend = new Resend(process.env.RESEND_API_KEY);

@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
         html: `
           <h1>Добро пожаловать, ${name}!</h1>
           <p>Для завершения регистрации подтвердите ваш email:</p>
-          <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}">
+          <a href="${process.env.APP_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}">
             Подтвердить email
           </a>
           <p>Ссылка действительна 24 часа.</p>

@@ -48,6 +48,16 @@ db.exec(`
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS board_shares (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    boardId INTEGER NOT NULL,
+    userId INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (boardId) REFERENCES boards(id) ON DELETE CASCADE,
+    FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(boardId, userId)
+  );
 `);
 
 // Add bgStyle column if it doesn't exist yet (migration for existing DBs)

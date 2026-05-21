@@ -13,9 +13,10 @@ interface Props {
   boardName: string;
   initialState: string | null;
   initialBgStyle?: 'none' | 'grid' | 'dots';
+  isOwner: boolean;
 }
 
-export default function WhiteboardApp({ boardId, boardName, initialState, initialBgStyle }: Props) {
+export default function WhiteboardApp({ boardId, boardName, initialState, initialBgStyle, isOwner }: Props) {
   const canvasRef = useRef<CanvasRef>(null);
 
   // Tool & drawing properties
@@ -154,7 +155,9 @@ export default function WhiteboardApp({ boardId, boardName, initialState, initia
       }}
     >
       <TopBar
+        boardId={boardId}
         boardName={name}
+        isOwner={isOwner}
         saveStatus={saveStatus}
         zoom={zoom}
         canUndo={canUndo}

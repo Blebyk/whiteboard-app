@@ -14,11 +14,18 @@ export default async function BoardPage({
   if (!user) redirect('/login');
 
   const { id } = await params;
+  // Allow access if the user owns the board OR has been shared with.
   const board = db
-    .prepare('SELECT * FROM boards WHERE id = ? AND userId = ?')
-    .get(Number(id), user.id) as any;
+    .prepare(`
+      SELECT b.* FROM boards b
+      LEFT JOIN board_shares s ON s.boardId = b.id AND s.userId = ?
+      WHERE b.id = ? AND (b.userId = ? OR s.userId = ?)
+    `)
+    .get(user.id, Number(id), user.id, user.id) as any;
 
   if (!board) redirect('/dashboard');
+
+  const isOwner = board.userId === user.id;
 
   return (
     <WhiteboardApp
@@ -26,6 +33,7 @@ export default async function BoardPage({
       boardName={board.name}
       initialState={board.canvasState || null}
       initialBgStyle={board.bgStyle || 'dots'}
+      isOwner={isOwner}
     />
   );
 }

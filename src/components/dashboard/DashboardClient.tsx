@@ -10,6 +10,8 @@ interface Board {
   thumbnail: string | null;
   created_at: string;
   updated_at: string;
+  shared?: number;          // 0 = owned, 1 = shared with me
+  ownerName?: string | null; // name of the owner if shared
 }
 
 interface User {
@@ -45,8 +47,13 @@ export default function DashboardClient({ user }: { user: User }) {
   async function fetchBoards() {
     try {
       const res = await fetch('/api/boards');
-      const data = await res.json();
+      // Guard against empty response body (e.g., when the server crashed)
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : {};
       setBoards(data.boards || []);
+    } catch (e) {
+      console.error('Failed to load boards:', e);
+      setBoards([]);
     } finally {
       setLoading(false);
     }
@@ -67,8 +74,11 @@ export default function DashboardClient({ user }: { user: User }) {
     }
   }
 
-  async function deleteBoard(id: number) {
-    if (!confirm('Удалить доску? Это действие нельзя отменить.')) return;
+  async function deleteBoard(id: number, shared = false) {
+    const msg = shared
+      ? 'Убрать доску у себя? Доска останется у её владельца.'
+      : 'Удалить доску? Это действие нельзя отменить.';
+    if (!confirm(msg)) return;
     await fetch(`/api/boards/${id}`, { method: 'DELETE' });
     setBoards((prev) => prev.filter((b) => b.id !== id));
     setMenuId(null);
@@ -113,7 +123,7 @@ export default function DashboardClient({ user }: { user: User }) {
         zIndex: 10,
       }}>
         <Link href="/" style={{ textDecoration: 'none' }}>
-          <span style={{ fontSize: '22px', fontWeight: 800, color: '#1a1a2e' }}>✏️ Whiteboard</span>
+          <span style={{ fontSize: '22px', fontWeight: 800, color: '#1a1a2e', letterSpacing: '-0.01em' }}>Whiteboard</span>
         </Link>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -178,7 +188,13 @@ export default function DashboardClient({ user }: { user: User }) {
             borderRadius: '16px',
             border: '2px dashed #e5e7eb',
           }}>
-            <div style={{ fontSize: '64px', marginBottom: '16px' }}>🎨</div>
+            <div style={{ marginBottom: '16px', color: '#4f46e5', display: 'inline-flex' }}>
+              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="18" height="18" x="3" y="3" rx="2" />
+                <path d="M9 3v18" />
+                <path d="M3 9h18" />
+              </svg>
+            </div>
             <h3 style={{ color: '#1a1a2e', marginBottom: '8px' }}>У вас ещё нет досок</h3>
             <p style={{ color: '#888', marginBottom: '24px' }}>Создайте первую доску, чтобы начать работу</p>
             <button
@@ -255,6 +271,7 @@ export default function DashboardClient({ user }: { user: User }) {
                     alignItems: 'center',
                     justifyContent: 'center',
                     overflow: 'hidden',
+                    position: 'relative',
                     borderBottom: '1px solid #f0f0f0',
                   }}>
                     {board.thumbnail ? (
@@ -264,7 +281,39 @@ export default function DashboardClient({ user }: { user: User }) {
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       />
                     ) : (
-                      <span style={{ fontSize: '40px', opacity: 0.3 }}>🎨</span>
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6 }}>
+                        <rect width="18" height="18" x="3" y="3" rx="2" />
+                        <path d="M9 3v18" />
+                        <path d="M3 9h18" />
+                      </svg>
+                    )}
+                    {/* «Поделено» badge on shared boards */}
+                    {board.shared === 1 && (
+                      <div style={{
+                        position: 'absolute',
+                        top: 10,
+                        left: 10,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        padding: '4px 8px',
+                        backgroundColor: 'rgba(79, 70, 229, 0.95)',
+                        color: 'white',
+                        borderRadius: 6,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        letterSpacing: '0.02em',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                      }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="18" cy="5" r="3" />
+                          <circle cx="6" cy="12" r="3" />
+                          <circle cx="18" cy="19" r="3" />
+                          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                        </svg>
+                        ПОДЕЛЕНО
+                      </div>
                     )}
                   </div>
                 </Link>
@@ -305,7 +354,9 @@ export default function DashboardClient({ user }: { user: User }) {
                       </p>
                     )}
                     <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#999' }}>
-                      {formatDate(board.updated_at)}
+                      {board.shared === 1 && board.ownerName
+                        ? `от ${board.ownerName} · ${formatDate(board.updated_at)}`
+                        : formatDate(board.updated_at)}
                     </p>
                   </div>
 
@@ -349,23 +400,27 @@ export default function DashboardClient({ user }: { user: User }) {
                           }}
                           style={menuItemStyle}
                         >
-                          ✏️ Открыть
+                          Открыть
                         </button>
+                        {/* Rename is owner-only */}
+                        {board.shared !== 1 && (
+                          <button
+                            onClick={() => {
+                              setRenamingId(board.id);
+                              setRenameValue(board.name);
+                              setMenuId(null);
+                            }}
+                            style={menuItemStyle}
+                          >
+                            Переименовать
+                          </button>
+                        )}
+                        {/* Owner deletes the board for everyone; shared user only removes it from their list */}
                         <button
-                          onClick={() => {
-                            setRenamingId(board.id);
-                            setRenameValue(board.name);
-                            setMenuId(null);
-                          }}
-                          style={menuItemStyle}
-                        >
-                          📝 Переименовать
-                        </button>
-                        <button
-                          onClick={() => deleteBoard(board.id)}
+                          onClick={() => deleteBoard(board.id, board.shared === 1)}
                           style={{ ...menuItemStyle, color: '#dc2626' }}
                         >
-                          🗑️ Удалить
+                          {board.shared === 1 ? 'Убрать у себя' : 'Удалить'}
                         </button>
                       </div>
                     )}

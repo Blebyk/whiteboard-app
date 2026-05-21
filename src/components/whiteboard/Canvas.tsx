@@ -322,15 +322,30 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
   // `data.isSticky` and `data.minH` are stored inside Fabric's standard `data`
   // property, which IS always serialised by Fabric. Runtime-only things
   // (_stickyMinH, _renderBackground, event handlers) are re-applied here.
+  //
+  // IDEMPOTENT: safe to call multiple times. Always enforces minimum height
+  // on every call (object:added may fire before Fabric is done shrinking the
+  // height to fit empty text — the safety-net forEach() then re-enforces).
   const patchStickyNote = useCallback((obj: any) => {
-    if (obj._stickyPatched || !obj.data?.isSticky) return;
-    obj._stickyPatched = true;
+    if (!obj || !obj.data?.isSticky) return;
 
-    // Restore runtime min-height from the always-serialised data.minH
     const minH: number = obj.data.minH ?? 200;
+
+    // ── ALWAYS re-enforce height, even if already patched ──
+    // Fabric.js v6 sometimes recalculates height between object:added and
+    // the final render, so we keep correcting it on every safety pass.
+    if (typeof obj.height === 'number' && obj.height < minH) {
+      obj.height = minH;
+      obj.setCoords();
+    }
     obj._stickyMinH = minH;
 
-    // Custom background rendering (rounded rect + fold)
+    // First-time-only setup: custom background, initDimensions patch,
+    // controls, and scaling handler. These are runtime-only and survive
+    // for the lifetime of the instance.
+    if (obj._stickyPatched) return;
+    obj._stickyPatched = true;
+
     applyStickyRenderBg(obj);
     obj.clipPath = null; // remove stale clipPath from older saves
 
@@ -341,9 +356,6 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       const min = this._stickyMinH ?? minH;
       if (this.height < min) this.height = min;
     };
-    // Apply immediately — Fabric may have already shrunk height to fit text
-    obj.initDimensions();
-    obj.setCoords();
 
     // Controls: sides + bottom + rotation only
     obj.setControlsVisibility({
@@ -815,6 +827,10 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       if (!c || hIdx.current <= 0) return;
       hIdx.current--;
       c.loadFromJSON(JSON.parse(history.current[hIdx.current])).then(() => {
+        // Re-apply sticky-note patches: object:added doesn't always fire
+        // during Fabric v6's loadFromJSON, so we re-run patchStickyNote
+        // explicitly to restore _renderBackground + initDimensions overrides.
+        c.getObjects().forEach((o: any) => patchStickyNote(o));
         c.renderAll();
         applyTool(c, pRef.current.tool);
         pRef.current.onHistoryChange(
@@ -828,6 +844,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       if (!c || hIdx.current >= history.current.length - 1) return;
       hIdx.current++;
       c.loadFromJSON(JSON.parse(history.current[hIdx.current])).then(() => {
+        c.getObjects().forEach((o: any) => patchStickyNote(o));
         c.renderAll();
         applyTool(c, pRef.current.tool);
         pRef.current.onHistoryChange(

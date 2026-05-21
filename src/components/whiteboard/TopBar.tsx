@@ -2,9 +2,12 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import ShareButton from './ShareButton';
 
 interface TopBarProps {
+  boardId: number;
   boardName: string;
+  isOwner: boolean;
   saveStatus: 'saved' | 'saving' | 'unsaved';
   zoom: number;
   canUndo: boolean;
@@ -83,7 +86,9 @@ const IC = ({ d, size = 16 }: { d: React.ReactNode; size?: number }) => (
 );
 
 export default function TopBar({
+  boardId,
   boardName,
+  isOwner,
   saveStatus,
   zoom,
   canUndo,
@@ -131,10 +136,10 @@ export default function TopBar({
 
   const saveLabel =
     saveStatus === 'saving'
-      ? '⏳ Сохранение...'
+      ? 'Сохранение...'
       : saveStatus === 'saved'
-      ? '✓ Сохранено'
-      : '● Не сохранено';
+      ? 'Сохранено'
+      : 'Не сохранено';
 
   const saveColor =
     saveStatus === 'saving' ? '#6b7280' : saveStatus === 'saved' ? '#16a34a' : '#d97706';
@@ -278,6 +283,9 @@ export default function TopBar({
           >+</button>
         </div>
 
+        {/* Share — only the board owner can manage access */}
+        {isOwner && <ShareButton boardId={boardId} />}
+
         {/* Save */}
         <Btn onClick={onSave} title="Сохранить (Ctrl+S)">
           <IC d={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></>} />
@@ -297,8 +305,8 @@ export default function TopBar({
               zIndex: 100, minWidth: '180px', overflow: 'hidden', padding: '4px',
             }}>
               {[
-                { label: '⬇️  Экспорт PNG', action: () => { onExportPNG(); setMenuOpen(false); } },
-                { label: '🗑️  Очистить доску', action: () => { if (confirm('Очистить всё содержимое доски?')) { onClear(); } setMenuOpen(false); }, danger: true },
+                { label: 'Экспорт PNG', action: () => { onExportPNG(); setMenuOpen(false); } },
+                { label: 'Очистить доску', action: () => { if (confirm('Очистить всё содержимое доски?')) { onClear(); } setMenuOpen(false); }, danger: true },
               ].map((item) => (
                 <button
                   key={item.label}

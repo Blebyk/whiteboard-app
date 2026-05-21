@@ -63,19 +63,22 @@ function ResetPasswordForm() {
     <div style={{
       minHeight: '100vh',
       backgroundColor: '#f0f2f5',
+      backgroundImage: 'radial-gradient(circle, #9aa5b4 1.2px, transparent 1.2px)',
+      backgroundSize: '24px 24px',
+      backgroundPosition: '0 0',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      fontFamily: 'Arial, sans-serif',
+      padding: '40px 20px',
     }}>
       <div style={{ marginBottom: '24px', textAlign: 'center' }}>
         <Link href="/" style={{ textDecoration: 'none' }}>
-          <h1 style={{ fontSize: '32px', color: '#1a1a2e', margin: 0, fontWeight: 800 }}>
-            ✏️ Whiteboard
+          <h1 style={{ fontSize: '32px', color: '#1a1a2e', margin: 0, fontWeight: 800, letterSpacing: '-0.01em' }}>
+            Whiteboard
           </h1>
         </Link>
-        <p style={{ color: '#666', marginTop: '8px' }}>Новый пароль</p>
+        <p style={{ color: '#6b7280', marginTop: '8px', fontSize: 15 }}>Новый пароль</p>
       </div>
 
       <div style={{

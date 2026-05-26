@@ -76,5 +76,15 @@ if (!colNames.includes('resetTokenExpiry')) {
   db.exec('ALTER TABLE users ADD COLUMN resetTokenExpiry DATETIME');
 }
 
+// Add role column to board_shares (migration for existing DBs)
+const sharesCols = db.pragma('table_info(board_shares)') as { name: string }[];
+if (!sharesCols.map((c) => c.name).includes('role')) {
+  db.exec("ALTER TABLE board_shares ADD COLUMN role TEXT NOT NULL DEFAULT 'editor'");
+}
+
+// Add updated_by column to boards (migration for existing DBs)
+if (!boardCols.map((c) => c.name).includes('updated_by')) {
+  db.exec('ALTER TABLE boards ADD COLUMN updated_by INTEGER');
+}
 
 export default db;

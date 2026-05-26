@@ -53,6 +53,7 @@ export interface CanvasRef {
 
 export interface CanvasProps {
   tool: Tool;
+  readOnly?: boolean;
   strokeColor: string;
   fillColor: string;
   strokeWidth: number;
@@ -317,6 +318,25 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       c.requestRenderAll();
     }
   }, [props.tool, applyTool, props.strokeColor, props.strokeWidth]);
+
+  // ─── Read-only mode ───────────────────────────────────────────
+  useEffect(() => {
+    const c = fc.current;
+    if (!c) return;
+    if (props.readOnly) {
+      c.isDrawingMode = false;
+      c.selection = false;
+      c.skipTargetFind = true;
+      c.defaultCursor = 'default';
+      c.hoverCursor = 'default';
+    } else {
+      c.skipTargetFind = false;
+      c.defaultCursor = 'default';
+      c.hoverCursor = 'move';
+      applyTool(c, pRef.current.tool);
+    }
+    c.requestRenderAll();
+  }, [props.readOnly, applyTool]);
 
   // ─── Restore sticky-note behaviour after JSON load ────────────
   // `data.isSticky` and `data.minH` are stored inside Fabric's standard `data`

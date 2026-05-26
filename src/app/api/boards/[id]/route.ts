@@ -45,10 +45,20 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const board = getAccessibleBoard(user.id, Number(id));
   if (!board) return NextResponse.json({ error: 'Доска не найдена' }, { status: 404 });
 
+  // Viewers cannot save
+  const isOwner = board.userId === user.id;
+  if (!isOwner) {
+    const share = db.prepare('SELECT role FROM board_shares WHERE boardId = ? AND userId = ?')
+      .get(Number(id), user.id) as any;
+    if (!share || share.role !== 'editor') {
+      return NextResponse.json({ error: 'Нет прав на редактирование' }, { status: 403 });
+    }
+  }
+
   const { name, canvasState, thumbnail, bgStyle } = await request.json().catch(() => ({}));
 
-  const updates: string[] = ["updated_at = datetime('now')"];
-  const values: unknown[] = [];
+  const updates: string[] = ["updated_at = datetime('now')", 'updated_by = ?'];
+  const values: unknown[] = [user.id];
 
   if (name !== undefined) { updates.push('name = ?'); values.push(name); }
   if (canvasState !== undefined) { updates.push('canvasState = ?'); values.push(canvasState); }
@@ -59,7 +69,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
   db.prepare(`UPDATE boards SET ${updates.join(', ')} WHERE id = ?`).run(...values);
 
-  const updated = db.prepare('SELECT * FROM boards WHERE id = ?').get(Number(id)) as any;
+  const updated = db.prepare('SELECT id, updated_at, updated_by FROM boards WHERE id = ?').get(Number(id)) as any;
   return NextResponse.json({ board: updated });
 }
 

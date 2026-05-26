@@ -8,6 +8,7 @@ interface TopBarProps {
   boardId: number;
   boardName: string;
   isOwner: boolean;
+  canEdit: boolean;
   saveStatus: 'saved' | 'saving' | 'unsaved';
   zoom: number;
   canUndo: boolean;
@@ -89,6 +90,7 @@ export default function TopBar({
   boardId,
   boardName,
   isOwner,
+  canEdit,
   saveStatus,
   zoom,
   canUndo,
@@ -183,7 +185,7 @@ export default function TopBar({
           ←
         </Link>
 
-        {editing ? (
+        {canEdit && editing ? (
           <input
             ref={inputRef}
             value={nameVal}
@@ -205,7 +207,7 @@ export default function TopBar({
               maxWidth: '240px',
             }}
           />
-        ) : (
+        ) : canEdit ? (
           <button
             onClick={() => setEditing(true)}
             title="Переименовать"
@@ -228,29 +230,49 @@ export default function TopBar({
           >
             {nameVal}
           </button>
+        ) : (
+          <span style={{
+            fontSize: '15px', fontWeight: 700, color: '#1a1a2e',
+            padding: '3px 6px', maxWidth: '200px',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {nameVal}
+          </span>
         )}
 
-        <span style={{ fontSize: '12px', color: saveColor, fontWeight: 500, minWidth: '100px' }}>
-          {saveLabel}
-        </span>
+        {canEdit ? (
+          <span style={{ fontSize: '12px', color: saveColor, fontWeight: 500, minWidth: '100px' }}>
+            {saveLabel}
+          </span>
+        ) : (
+          <span style={{
+            fontSize: '11px', fontWeight: 600, color: '#6b7280',
+            backgroundColor: '#f3f4f6', border: '1px solid #e5e7eb',
+            borderRadius: '5px', padding: '2px 8px',
+          }}>
+            Только просмотр
+          </span>
+        )}
       </div>
 
-      {/* ── Center: Undo / Redo + Delete ── */}
+      {/* ── Center: Undo / Redo + Delete (editors only) ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, justifyContent: 'center' }}>
-        <Btn onClick={onUndo} disabled={!canUndo} title="Отменить (Ctrl+Z)">
-          <IC d={<><polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 0 0-4-4H4" /></>} />
-          Отмена
-        </Btn>
-        <Btn onClick={onRedo} disabled={!canRedo} title="Повторить (Ctrl+Y)">
-          Повтор
-          <IC d={<><polyline points="15 14 20 9 15 4" /><path d="M4 20v-7a4 4 0 0 1 4-4h12" /></>} />
-        </Btn>
-        {hasSelection && (
-          <Btn onClick={onDelete} danger title="Удалить выбранное (Delete)">
-            <IC d={<><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></>} />
-            Удалить
+        {canEdit && <>
+          <Btn onClick={onUndo} disabled={!canUndo} title="Отменить (Ctrl+Z)">
+            <IC d={<><polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 0 0-4-4H4" /></>} />
+            Отмена
           </Btn>
-        )}
+          <Btn onClick={onRedo} disabled={!canRedo} title="Повторить (Ctrl+Y)">
+            Повтор
+            <IC d={<><polyline points="15 14 20 9 15 4" /><path d="M4 20v-7a4 4 0 0 1 4-4h12" /></>} />
+          </Btn>
+          {hasSelection && (
+            <Btn onClick={onDelete} danger title="Удалить выбранное (Delete)">
+              <IC d={<><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></>} />
+              Удалить
+            </Btn>
+          )}
+        </>}
       </div>
 
       {/* ── Right: Zoom + Actions ── */}
@@ -286,11 +308,13 @@ export default function TopBar({
         {/* Share — only the board owner can manage access */}
         {isOwner && <ShareButton boardId={boardId} />}
 
-        {/* Save */}
-        <Btn onClick={onSave} title="Сохранить (Ctrl+S)">
-          <IC d={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></>} />
-          Сохранить
-        </Btn>
+        {/* Save — editors only */}
+        {canEdit && (
+          <Btn onClick={onSave} title="Сохранить (Ctrl+S)">
+            <IC d={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></>} />
+            Сохранить
+          </Btn>
+        )}
 
         {/* Menu */}
         <div style={{ position: 'relative' }} ref={menuRef}>
@@ -306,7 +330,7 @@ export default function TopBar({
             }}>
               {[
                 { label: 'Экспорт PNG', action: () => { onExportPNG(); setMenuOpen(false); } },
-                { label: 'Очистить доску', action: () => { if (confirm('Очистить всё содержимое доски?')) { onClear(); } setMenuOpen(false); }, danger: true },
+                ...(canEdit ? [{ label: 'Очистить доску', action: () => { if (confirm('Очистить всё содержимое доски?')) { onClear(); } setMenuOpen(false); }, danger: true }] : []),
               ].map((item) => (
                 <button
                   key={item.label}

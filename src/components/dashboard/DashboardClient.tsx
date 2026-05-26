@@ -122,7 +122,7 @@ export default function DashboardClient({ user }: { user: User }) {
         top: 0,
         zIndex: 10,
       }}>
-        <Link href="/" style={{ textDecoration: 'none' }}>
+        <Link href="/dashboard" style={{ textDecoration: 'none' }}>
           <span style={{ fontSize: '22px', fontWeight: 800, color: '#1a1a2e', letterSpacing: '-0.01em' }}>Whiteboard</span>
         </Link>
 

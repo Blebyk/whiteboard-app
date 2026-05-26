@@ -14,13 +14,18 @@ interface Props {
   initialState: string | null;
   initialBgStyle?: 'none' | 'grid' | 'dots';
   isOwner: boolean;
+  canEdit: boolean;
+  currentUserId: number;
+  initialUpdatedAt: string;
 }
 
-export default function WhiteboardApp({ boardId, boardName, initialState, initialBgStyle, isOwner }: Props) {
+export default function WhiteboardApp({
+  boardId, boardName, initialState, initialBgStyle,
+  isOwner, canEdit, currentUserId, initialUpdatedAt,
+}: Props) {
   const canvasRef = useRef<CanvasRef>(null);
 
-  // Tool & drawing properties
-  const [tool, setTool] = useState<Tool>('select');
+  const [tool, setTool] = useState<Tool>(canEdit ? 'select' : 'pan');
   const [strokeColor, setStrokeColor] = useState('#1a1a2e');
   const [fillColor, setFillColor] = useState('transparent');
   const [strokeWidth, setStrokeWidth] = useState(2);
@@ -30,17 +35,6 @@ export default function WhiteboardApp({ boardId, boardName, initialState, initia
   const isMounted = useRef(false);
   useEffect(() => { bgStyleRef.current = bgStyle; }, [bgStyle]);
 
-  // Save bgStyle immediately on change (skip first mount)
-  useEffect(() => {
-    if (!isMounted.current) { isMounted.current = true; return; }
-    fetch(`/api/boards/${boardId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bgStyle }),
-    });
-  }, [bgStyle, boardId]);
-
-  // State
   const [zoom, setZoom] = useState(100);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
@@ -49,31 +43,70 @@ export default function WhiteboardApp({ boardId, boardName, initialState, initia
   const [name, setName] = useState(boardName);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
 
-  // ─── Auto-save every 30s ──────────────────────────────────────
+  // Track last known server state for sync polling
+  const lastSyncedAt = useRef<string>(initialUpdatedAt);
+  const isSyncing = useRef(false);
+
+  // ─── Save bgStyle immediately on change (skip first mount) ────
   useEffect(() => {
-    const interval = setInterval(() => {
-      triggerSave();
-    }, 30_000);
+    if (!isMounted.current) { isMounted.current = true; return; }
+    if (!canEdit) return;
+    fetch(`/api/boards/${boardId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bgStyle }),
+    });
+  }, [bgStyle, boardId, canEdit]);
+
+  // ─── Auto-save every 30s (editors only) ───────────────────────
+  useEffect(() => {
+    if (!canEdit) return;
+    const interval = setInterval(() => triggerSave(), 30_000);
     return () => clearInterval(interval);
-  }, [boardId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [boardId, canEdit]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── Real-time sync polling every 3s ──────────────────────────
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (isSyncing.current) return;
+      isSyncing.current = true;
+      try {
+        const res = await fetch(`/api/boards/${boardId}/sync`);
+        if (!res.ok) return;
+        const { updated_at, updated_by } = await res.json();
+        if (!updated_at) return;
+
+        // Only reload if changed by someone else
+        if (updated_at !== lastSyncedAt.current && updated_by !== currentUserId) {
+          lastSyncedAt.current = updated_at;
+          const full = await fetch(`/api/boards/${boardId}`);
+          if (!full.ok) return;
+          const { board } = await full.json();
+          if (board?.canvasState) {
+            canvasRef.current?.loadState(board.canvasState);
+          }
+        }
+      } catch {
+        // ignore network errors
+      } finally {
+        isSyncing.current = false;
+      }
+    }, 3_000);
+    return () => clearInterval(interval);
+  }, [boardId, currentUserId]);
 
   // ─── Keyboard shortcuts ───────────────────────────────────────
   useEffect(() => {
+    if (!canEdit) return;
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement;
-      const inInput =
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.isContentEditable;
+      const inInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (inInput) return;
 
       const ctrl = e.ctrlKey || e.metaKey;
-
       if (ctrl) {
         if (e.key === 'z') { e.preventDefault(); canvasRef.current?.undo(); return; }
-        if (e.key === 'y' || (e.shiftKey && e.key === 'Z')) {
-          e.preventDefault(); canvasRef.current?.redo(); return;
-        }
+        if (e.key === 'y' || (e.shiftKey && e.key === 'Z')) { e.preventDefault(); canvasRef.current?.redo(); return; }
         if (e.key === 's') { e.preventDefault(); triggerSave(); return; }
         if (e.key === '+' || e.key === '=') { e.preventDefault(); canvasRef.current?.zoomIn(); return; }
         if (e.key === '-') { e.preventDefault(); canvasRef.current?.zoomOut(); return; }
@@ -81,7 +114,6 @@ export default function WhiteboardApp({ boardId, boardName, initialState, initia
       }
 
       if (e.key === 'Escape') { setTool('select'); return; }
-
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (hasSelection) { e.preventDefault(); canvasRef.current?.deleteSelected(); }
         return;
@@ -96,29 +128,32 @@ export default function WhiteboardApp({ boardId, boardName, initialState, initia
       const next = keyMap[e.key.toLowerCase()];
       if (next) setTool(next);
     }
-
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [hasSelection]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hasSelection, canEdit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Save ─────────────────────────────────────────────────────
   const triggerSave = useCallback(async () => {
     const c = canvasRef.current;
-    if (!c) return;
+    if (!c || !canEdit) return;
     setSaveStatus('saving');
     try {
       const canvasState = c.getState();
       const thumbnail = c.getThumbnail();
-      await fetch(`/api/boards/${boardId}`, {
+      const res = await fetch(`/api/boards/${boardId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ canvasState, thumbnail, bgStyle: bgStyleRef.current }),
       });
+      const data = await res.json();
+      if (data.board?.updated_at) {
+        lastSyncedAt.current = data.board.updated_at;
+      }
       setSaveStatus('saved');
     } catch {
       setSaveStatus('unsaved');
     }
-  }, [boardId]);
+  }, [boardId, canEdit]);
 
   // ─── Rename ───────────────────────────────────────────────────
   const handleRename = useCallback(async (newName: string) => {
@@ -145,19 +180,12 @@ export default function WhiteboardApp({ boardId, boardName, initialState, initia
   }, []);
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        overflow: 'hidden',
-        fontFamily: 'Arial, sans-serif',
-      }}
-    >
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', fontFamily: 'Arial, sans-serif' }}>
       <TopBar
         boardId={boardId}
         boardName={name}
         isOwner={isOwner}
+        canEdit={canEdit}
         saveStatus={saveStatus}
         zoom={zoom}
         canUndo={canUndo}
@@ -176,17 +204,15 @@ export default function WhiteboardApp({ boardId, boardName, initialState, initia
       />
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <Toolbar
-          tool={tool}
-          onToolChange={setTool}
-          onImageUpload={handleImageUpload}
-        />
+        {canEdit && (
+          <Toolbar tool={tool} onToolChange={setTool} onImageUpload={handleImageUpload} />
+        )}
 
-        {/* Canvas area */}
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
           <Canvas
             ref={canvasRef}
-            tool={tool}
+            tool={canEdit ? tool : 'pan'}
+            readOnly={!canEdit}
             strokeColor={strokeColor}
             fillColor={fillColor}
             strokeWidth={strokeWidth}
@@ -201,7 +227,6 @@ export default function WhiteboardApp({ boardId, boardName, initialState, initia
             }}
           />
 
-          {/* Zoom quick-access bottom-right */}
           <div style={{
             position: 'absolute', bottom: '16px', right: '16px',
             display: 'flex', gap: '6px', alignItems: 'center',
@@ -222,7 +247,7 @@ export default function WhiteboardApp({ boardId, boardName, initialState, initia
           </div>
         </div>
 
-        {selectionInfo && (
+        {canEdit && selectionInfo && (
           <FloatingToolbar
             info={selectionInfo}
             onApply={(props) => {
@@ -236,31 +261,32 @@ export default function WhiteboardApp({ boardId, boardName, initialState, initia
           />
         )}
 
-
-        <PropertiesPanel
-          tool={tool}
-          strokeColor={strokeColor}
-          fillColor={fillColor}
-          strokeWidth={strokeWidth}
-          fontSize={fontSize}
-          bgStyle={bgStyle}
-          hasSelection={hasSelection}
-          onStrokeColorChange={(c) => {
-            setStrokeColor(c);
-            if (hasSelection) canvasRef.current?.applyToSelection({ stroke: c });
-          }}
-          onFillColorChange={(c) => {
-            setFillColor(c);
-            if (hasSelection) canvasRef.current?.applyToSelection({ fill: c });
-          }}
-          onStrokeWidthChange={(n) => {
-            setStrokeWidth(n);
-            if (hasSelection) canvasRef.current?.applyToSelection({ strokeWidth: n });
-          }}
-          onFontSizeChange={setFontSize}
-          onBgStyleChange={setBgStyle}
-          onDelete={() => canvasRef.current?.deleteSelected()}
-        />
+        {canEdit && (
+          <PropertiesPanel
+            tool={tool}
+            strokeColor={strokeColor}
+            fillColor={fillColor}
+            strokeWidth={strokeWidth}
+            fontSize={fontSize}
+            bgStyle={bgStyle}
+            hasSelection={hasSelection}
+            onStrokeColorChange={(c) => {
+              setStrokeColor(c);
+              if (hasSelection) canvasRef.current?.applyToSelection({ stroke: c });
+            }}
+            onFillColorChange={(c) => {
+              setFillColor(c);
+              if (hasSelection) canvasRef.current?.applyToSelection({ fill: c });
+            }}
+            onStrokeWidthChange={(n) => {
+              setStrokeWidth(n);
+              if (hasSelection) canvasRef.current?.applyToSelection({ strokeWidth: n });
+            }}
+            onFontSizeChange={setFontSize}
+            onBgStyleChange={setBgStyle}
+            onDelete={() => canvasRef.current?.deleteSelected()}
+          />
+        )}
       </div>
     </div>
   );

@@ -123,7 +123,7 @@ export default function WhiteboardApp({
         v: 'select', h: 'pan', p: 'pencil',
         r: 'rect', o: 'ellipse', t: 'triangle',
         d: 'diamond', l: 'line', a: 'arrow',
-        x: 'text', s: 'sticky', e: 'eraser', i: 'image',
+        x: 'text', n: 'sticker', e: 'eraser', i: 'image',
       };
       const next = keyMap[e.key.toLowerCase()];
       if (next) setTool(next);
@@ -270,6 +270,7 @@ export default function WhiteboardApp({
             fontSize={fontSize}
             bgStyle={bgStyle}
             hasSelection={hasSelection}
+            isStickerSelected={!!selectionInfo?.isSticker}
             onStrokeColorChange={(c) => {
               setStrokeColor(c);
               if (hasSelection) canvasRef.current?.applyToSelection({ stroke: c });

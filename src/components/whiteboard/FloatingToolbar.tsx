@@ -42,8 +42,6 @@ export default function FloatingToolbar({ info, onApply, onDelete }: Props) {
     setFs(info.fontSize);
   }, [info.strokeColor, info.fillColor, info.strokeWidth, info.fontSize, info.objectType]);
 
-  if (info.isSticky) return null;
-
   const isText = info.objectType === 'i-text' || info.objectType === 'textbox';
   const isImage = info.objectType === 'image';
   const isLine = info.objectType === 'line' || info.objectType === 'path' || info.objectType === 'group';

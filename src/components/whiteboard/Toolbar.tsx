@@ -113,15 +113,15 @@ const TOOLS: ToolDef[] = [
     ),
   },
   {
-    id: 'sticky',
+    id: 'sticker',
     label: 'Стикер',
-    shortcut: 'S',
+    shortcut: 'N',
     icon: (
       <IC>
-        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-        <polyline points="14 2 14 8 20 8" />
-        <line x1="8" y1="13" x2="16" y2="13" />
-        <line x1="8" y1="17" x2="12" y2="17" />
+        <path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11l5-5V5a2 2 0 0 0-2-2z" />
+        <polyline points="16 21 16 16 21 16" />
+        <line x1="7" y1="8" x2="14" y2="8" />
+        <line x1="7" y1="12" x2="12" y2="12" />
       </IC>
     ),
   },
@@ -151,7 +151,7 @@ const TOOLS: ToolDef[] = [
   },
 ];
 
-const DIVIDER_AFTER: Tool[] = ['pan', 'pencil', 'arrow', 'sticky'];
+const DIVIDER_AFTER: Tool[] = ['pan', 'pencil', 'arrow', 'sticker'];
 
 export default function Toolbar({ tool, onToolChange, onImageUpload }: ToolbarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);

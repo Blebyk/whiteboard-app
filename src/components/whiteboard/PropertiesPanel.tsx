@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { Tool } from './Canvas';
+import { STICKER_COLORS } from './Canvas';
 import { ColorPicker } from './ColorPicker';
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
   fontSize: number;
   bgStyle: 'none' | 'grid' | 'dots';
   hasSelection: boolean;
+  isStickerSelected?: boolean;
   onStrokeColorChange(c: string): void;
   onFillColorChange(c: string): void;
   onStrokeWidthChange(n: number): void;
@@ -80,7 +82,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-const SHOW_FONT_TOOLS: Tool[] = ['text', 'sticky'];
+const SHOW_FONT_TOOLS: Tool[] = ['text'];
 const SHOW_FILL_TOOLS: Tool[] = ['rect', 'ellipse', 'triangle', 'diamond', 'select'];
 
 export default function PropertiesPanel({
@@ -91,6 +93,7 @@ export default function PropertiesPanel({
   fontSize,
   bgStyle,
   hasSelection,
+  isStickerSelected = false,
   onStrokeColorChange,
   onFillColorChange,
   onStrokeWidthChange,
@@ -105,9 +108,10 @@ export default function PropertiesPanel({
     fillColor.startsWith('#') ? fillColor : '#ffffff'
   );
 
-  const showFill = SHOW_FILL_TOOLS.includes(tool) || hasSelection;
+  const showStickerPalette = tool === 'sticker' || isStickerSelected;
+  const showFill = (SHOW_FILL_TOOLS.includes(tool) || hasSelection) && !showStickerPalette;
   const showFont = SHOW_FONT_TOOLS.includes(tool);
-  const showStroke = tool !== 'image' && tool !== 'pan' && tool !== 'select';
+  const showStroke = tool !== 'image' && tool !== 'pan' && tool !== 'select' && tool !== 'sticker' && !isStickerSelected;
 
   return (
     <div
@@ -123,6 +127,38 @@ export default function PropertiesPanel({
         boxShadow: '-2px 0 8px rgba(0,0,0,0.04)',
       }}
     >
+      {/* ── Sticker color palette ── */}
+      {showStickerPalette && (
+        <Section title="Цвет стикера">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            {STICKER_COLORS.map((c) => {
+              const active = fillColor === c;
+              return (
+                <button
+                  key={c}
+                  onClick={() => onFillColorChange(c)}
+                  title={c}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    backgroundColor: c,
+                    border: active ? '2.5px solid #4f46e5' : '1.5px solid #e5e7eb',
+                    boxShadow: active
+                      ? '0 0 0 1px #4f46e5, 0 1px 3px rgba(0,0,0,0.15)'
+                      : '0 1px 2px rgba(0,0,0,0.08)',
+                    padding: 0,
+                    outline: 'none',
+                    flexShrink: 0,
+                  }}
+                />
+              );
+            })}
+          </div>
+        </Section>
+      )}
+
       {/* ── Stroke color ── */}
       {showStroke && (
         <Section title="Цвет контура">
@@ -275,7 +311,7 @@ export default function PropertiesPanel({
           ['V', 'Выбор'], ['H', 'Рука'], ['P', 'Карандаш'],
           ['R', 'Прямоугольник'], ['O', 'Эллипс'], ['T', 'Треугольник'],
           ['D', 'Ромб'], ['L', 'Линия'], ['A', 'Стрелка'],
-          ['X', 'Текст'], ['S', 'Стикер'], ['E', 'Ластик'],
+          ['X', 'Текст'], ['N', 'Стикер'], ['E', 'Ластик'], ['I', 'Изображение'],
           ['Ctrl+Z', 'Отмена'], ['Ctrl+Y', 'Повтор'], ['Del', 'Удалить'],
         ].map(([k, label]) => (
           <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>

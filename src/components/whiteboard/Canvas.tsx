@@ -19,7 +19,7 @@ export type Tool =
   | 'line'
   | 'arrow'
   | 'text'
-  | 'sticky'
+  | 'sticker'
   | 'eraser'
   | 'image';
 
@@ -30,8 +30,8 @@ export interface SelectionInfo {
   strokeWidth: number;
   fontSize: number;
   objectType: string;
-  isSticky: boolean;
   isMulti: boolean;
+  isSticker: boolean;
 }
 
 
@@ -65,80 +65,6 @@ export interface CanvasProps {
   onSelectionChange(active: boolean, info?: SelectionInfo): void;
 }
 
-// Miro-inspired sticky note palette
-const STICKY_COLORS = [
-  '#fff9b1', '#ffd966',   // yellows
-  '#f5a623', '#f47373',   // orange, coral
-  '#f9a8d4', '#d8b4fe',   // pink, lavender
-  '#93c5fd', '#6ee7b7',   // blue, mint
-];
-
-/** Darken a CSS hex colour by `amount` (0–255 per channel). */
-function darkenHex(hex: string, amount: number): string {
-  if (!hex.startsWith('#')) return hex;
-  const c = hex.replace('#', '');
-  const full = c.length === 3 ? c.split('').map(x => x + x).join('') : c;
-  const n = parseInt(full, 16);
-  const r = Math.max(0, (n >> 16) - amount);
-  const g = Math.max(0, ((n >> 8) & 0xff) - amount);
-  const b = Math.max(0, (n & 0xff) - amount);
-  return `rgb(${r},${g},${b})`;
-}
-
-/**
- * Override _renderBackground on a Fabric Textbox instance so it draws:
- *  - rounded-rect background matching the note's backgroundColor
- *  - a subtle drop-shadow
- *  - a Miro-style folded corner (top-right)
- */
-function applyStickyRenderBg(note: any): void {
-  (note as any)._renderBackground = function (this: any, ctx: CanvasRenderingContext2D) {
-    const w = this.width;
-    const h = this.height;
-    const r = 4;       // corner radius
-    const fold = 16;   // folded corner size
-    const color: string = this.backgroundColor || '#fff9b1';
-
-    // ── Main background with shadow ──────────────────────────────
-    ctx.save();
-    ctx.shadowColor   = 'rgba(0,0,0,0.18)';
-    ctx.shadowBlur    = 14;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 4;
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    // top-left arc
-    ctx.moveTo(-w / 2 + r, -h / 2);
-    // top edge → top-right fold notch
-    ctx.lineTo(w / 2 - fold, -h / 2);
-    // diagonal fold cut
-    ctx.lineTo(w / 2, -h / 2 + fold);
-    // right edge ↓
-    ctx.lineTo(w / 2, h / 2 - r);
-    ctx.quadraticCurveTo(w / 2, h / 2, w / 2 - r, h / 2);
-    // bottom edge ←
-    ctx.lineTo(-w / 2 + r, h / 2);
-    ctx.quadraticCurveTo(-w / 2, h / 2, -w / 2, h / 2 - r);
-    // left edge ↑
-    ctx.lineTo(-w / 2, -h / 2 + r);
-    ctx.quadraticCurveTo(-w / 2, -h / 2, -w / 2 + r, -h / 2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-
-    // ── Folded-corner triangle (darker shade, no shadow) ─────────
-    ctx.save();
-    ctx.fillStyle = darkenHex(color, 30);
-    ctx.beginPath();
-    ctx.moveTo(w / 2 - fold, -h / 2);
-    ctx.lineTo(w / 2,        -h / 2 + fold);
-    ctx.lineTo(w / 2 - fold, -h / 2 + fold);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  };
-}
-
 const CURSORS: Record<string, string> = {
   select: 'default',
   pan: 'grab',
@@ -150,10 +76,31 @@ const CURSORS: Record<string, string> = {
   line: 'crosshair',
   arrow: 'crosshair',
   text: 'text',
-  sticky: 'cell',
+  sticker: 'crosshair',
   eraser: 'cell',
   image: 'crosshair',
 };
+
+const STICKER_SIZE = 200;
+const STICKER_PAD = 14;
+const STICKER_COLOR = '#FFF176';
+const STICKER_FONT_SIZE = 18;
+const STICKER_MIN_FONT = 6;
+const STICKER_TEXT_COLOR = '#1a1a2e';
+
+// Miro-like sticker palette. Used by PropertiesPanel and as the
+// allow-list when deciding whether the current fillColor is a
+// valid sticker color (otherwise falls back to STICKER_COLOR).
+export const STICKER_COLORS = [
+  '#FFF176', // yellow
+  '#FFD180', // orange
+  '#FF8A80', // pink/red
+  '#F48FB1', // pink
+  '#CE93D8', // purple
+  '#80D8FF', // light blue
+  '#A7FFEB', // mint
+  '#CCFF90', // light green
+];
 
 const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -338,63 +285,6 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
     c.requestRenderAll();
   }, [props.readOnly, applyTool]);
 
-  // ─── Restore sticky-note behaviour after JSON load ────────────
-  // `data.isSticky` and `data.minH` are stored inside Fabric's standard `data`
-  // property, which IS always serialised by Fabric. Runtime-only things
-  // (_stickyMinH, _renderBackground, event handlers) are re-applied here.
-  //
-  // IDEMPOTENT: safe to call multiple times. Always enforces minimum height
-  // on every call (object:added may fire before Fabric is done shrinking the
-  // height to fit empty text — the safety-net forEach() then re-enforces).
-  const patchStickyNote = useCallback((obj: any) => {
-    if (!obj || !obj.data?.isSticky) return;
-
-    const minH: number = obj.data.minH ?? 200;
-
-    // ── ALWAYS re-enforce height, even if already patched ──
-    // Fabric.js v6 sometimes recalculates height between object:added and
-    // the final render, so we keep correcting it on every safety pass.
-    if (typeof obj.height === 'number' && obj.height < minH) {
-      obj.height = minH;
-      obj.setCoords();
-    }
-    obj._stickyMinH = minH;
-
-    // First-time-only setup: custom background, initDimensions patch,
-    // controls, and scaling handler. These are runtime-only and survive
-    // for the lifetime of the instance.
-    if (obj._stickyPatched) return;
-    obj._stickyPatched = true;
-
-    applyStickyRenderBg(obj);
-    obj.clipPath = null; // remove stale clipPath from older saves
-
-    // Enforce minimum height whenever Fabric recalculates dimensions
-    const _origInit: () => void = obj.initDimensions.bind(obj);
-    obj.initDimensions = function (this: any) {
-      _origInit();
-      const min = this._stickyMinH ?? minH;
-      if (this.height < min) this.height = min;
-    };
-
-    // Controls: sides + bottom + rotation only
-    obj.setControlsVisibility({
-      tl: false, tr: false, bl: false, br: false,
-      mt: false, mb: true, ml: true, mr: true, mtr: true,
-    });
-
-    // Height resize (mb handle uses scaling; ml/mr are Textbox-native)
-    obj.on('scaling', function (this: any) {
-      const newH = Math.max(60, this.height * this.scaleY);
-      this._stickyMinH = newH;
-      this.data = { ...this.data, minH: newH }; // persist into serialisable data
-      this.height = newH;
-      this.scaleX = 1;
-      this.scaleY = 1;
-      this.setCoords();
-    });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   // ─── Initialize Fabric.js canvas (runs once) ─────────────────
   useEffect(() => {
     if (!canvasElRef.current || !containerRef.current) return;
@@ -437,20 +327,11 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       applyTool(canvas, pRef.current.tool);
       applyBackground(canvas, pRef.current.bgStyle);
 
-      // ── Restore sticky patches on every object:added ────────────
-      // Must be registered BEFORE loadFromJSON so initial load is covered.
-      canvas.on('object:added', (e: any) => patchStickyNote(e.target));
-
       // Load initial state
       const initState = pRef.current.initialState;
       if (initState) {
         try {
           await canvas.loadFromJSON(JSON.parse(initState));
-          // loadFromJSON fires object:added for each object, but the promise
-          // resolves after all objects are enlivened. Apply patches explicitly
-          // here as a safety net (handles edge cases where object:added timing
-          // differs across Fabric versions).
-          canvas.getObjects().forEach((o: any) => patchStickyNote(o));
           canvas.renderAll();
           applyTool(canvas, pRef.current.tool);
         } catch (e) {
@@ -460,6 +341,165 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
 
       history.current = [JSON.stringify(canvas.toJSON(['data']))];
       hIdx.current = 0;
+
+      // ── Sticker helpers ─────────────────────────────────────
+      // A sticker is a Group(Rect + Textbox). To edit the inner
+      // textbox we ungroup via fabric's removeAll() (which bakes
+      // the group's transform into the children's world coords),
+      // then re-group on editing exit. Resize is handled by
+      // `normalizeSticker`, which absorbs the group's scale into
+      // the children's unscaled dimensions — otherwise the text
+      // gets stretched and wraps at the original width.
+
+      // Shrink fontSize so text fits inside the rect in both
+      // dimensions. Width/height are unscaled; scale cancels
+      // because rect and textbox share the group's transform.
+      const fitStickerText = (rect: any, textbox: any) => {
+        const targetH = (rect.height || STICKER_SIZE) - STICKER_PAD * 2;
+        const targetW = (rect.width || STICKER_SIZE) - STICKER_PAD * 2;
+        // Defensive: fabric silently expands `width` to fit a
+        // single wide "word" via dynamicMinWidth.
+        textbox.set('width', targetW);
+        let fs = STICKER_FONT_SIZE;
+        textbox.set('fontSize', fs);
+        textbox.initDimensions?.();
+
+        const overflows = (): boolean => {
+          if (textbox.calcTextHeight() > targetH) return true;
+          const lines = (textbox as any)._textLines || [];
+          for (let i = 0; i < lines.length; i++) {
+            if (textbox.getLineWidth(i) > targetW) return true;
+          }
+          return false;
+        };
+
+        while (overflows() && fs > STICKER_MIN_FONT) {
+          fs -= 1;
+          textbox.set('fontSize', fs);
+          textbox.initDimensions?.();
+        }
+        textbox.setCoords();
+      };
+
+      // After user resize, bake group's scaleX/scaleY into the
+      // rect's width/height and reset scale to 1, so the text
+      // stops being stretched and re-wraps at the new width.
+      const normalizeSticker = (sticker: any) => {
+        if (!sticker || !sticker.data?.isSticker) return false;
+        if ((sticker.scaleX ?? 1) === 1 && (sticker.scaleY ?? 1) === 1) return false;
+
+        const items: any[] = sticker.removeAll();
+        canvas.remove(sticker);
+
+        const rect = items.find((o: any) => o.type === 'rect');
+        const textbox = items.find((o: any) => o.type === 'textbox');
+        if (!rect || !textbox) {
+          items.forEach((o) => canvas.add(o));
+          return false;
+        }
+
+        const newW = (rect.width || STICKER_SIZE) * (rect.scaleX || 1);
+        const newH = (rect.height || STICKER_SIZE) * (rect.scaleY || 1);
+        const rectLeft = rect.left;
+        const rectTop = rect.top;
+
+        rect.set({
+          left: rectLeft,
+          top: rectTop,
+          width: newW,
+          height: newH,
+          scaleX: 1,
+          scaleY: 1,
+        });
+        rect.setCoords();
+
+        textbox.set({
+          left: rectLeft + STICKER_PAD,
+          top: rectTop + STICKER_PAD,
+          width: newW - STICKER_PAD * 2,
+          scaleX: 1,
+          scaleY: 1,
+        });
+        fitStickerText(rect, textbox);
+
+        const newGroup = new fab.Group([rect, textbox], {
+          selectable: true,
+          evented: true,
+          subTargetCheck: false,
+        });
+        (newGroup as any).data = { isSticker: true };
+        canvas.add(newGroup);
+        canvas.setActiveObject(newGroup);
+        canvas.requestRenderAll();
+        return true;
+      };
+
+      const enterStickerEdit = (sticker: any) => {
+        if (!sticker || !sticker.data?.isSticker) return;
+
+        const items: any[] = sticker.removeAll();
+        canvas.remove(sticker);
+
+        const rect = items.find((o: any) => o.type === 'rect');
+        const textbox = items.find((o: any) => o.type === 'textbox');
+        if (!rect || !textbox) return;
+
+        rect.set({ selectable: false, evented: false });
+        textbox.set({ selectable: true, evented: true });
+        rect.setCoords();
+        textbox.setCoords();
+
+        const onChange = () => fitStickerText(rect, textbox);
+        fitStickerText(rect, textbox);
+
+        canvas.add(rect);
+        canvas.add(textbox);
+        canvas.setActiveObject(textbox);
+        textbox.enterEditing();
+        textbox.selectAll?.();
+        textbox.on('changed', onChange);
+
+        const onExit = () => {
+          textbox.off('changed', onChange);
+          textbox.off('editing:exited', onExit);
+          fitStickerText(rect, textbox);
+
+          canvas.remove(rect);
+          canvas.remove(textbox);
+
+          rect.set({ selectable: true, evented: true });
+          const newGroup = new fab.Group([rect, textbox], {
+            selectable: pRef.current.tool === 'select',
+            evented: pRef.current.tool === 'select' || pRef.current.tool === 'eraser',
+            subTargetCheck: false,
+          });
+          (newGroup as any).data = { isSticker: true };
+          canvas.add(newGroup);
+          if (pRef.current.tool === 'select') {
+            canvas.setActiveObject(newGroup);
+          }
+          canvas.requestRenderAll();
+          pushHistory();
+        };
+        textbox.on('editing:exited', onExit);
+        canvas.requestRenderAll();
+      };
+
+      // Normalize sticker after resize — must run BEFORE the
+      // generic pushHistory handler so the snapshot records the
+      // post-normalization state, not the stretched intermediate.
+      canvas.on('object:modified', (opt: any) => {
+        const t = opt.target;
+        if (t?.data?.isSticker) normalizeSticker(t);
+      });
+
+      // Double-click on a sticker → enter text edit mode
+      canvas.on('mouse:dblclick', (opt: any) => {
+        const target = opt.target;
+        if (target && target.data?.isSticker && !drawing.current) {
+          enterStickerEdit(target);
+        }
+      });
 
       // ── Zoom on wheel ───────────────────────────────────────
       canvas.on('mouse:wheel', (opt: any) => {
@@ -504,74 +544,56 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
           return;
         }
 
-        if (tool === 'sticky') {
-          const bg = STICKY_COLORS[Math.floor(Math.random() * STICKY_COLORS.length)];
-          const SIZE = 200; // square by default, like Miro
-
-          const note = new fab.Textbox('', {
-            left: pointer.x - SIZE / 2,
-            top:  pointer.y - SIZE / 2,
-            width: SIZE,
-            fontSize: 16,
-            fontFamily: "'Helvetica Neue', Arial, sans-serif",
-            fill: '#1f2937',
+        if (tool === 'sticker') {
+          const stickerColor =
+            pRef.current.fillColor && pRef.current.fillColor.startsWith('#')
+              ? pRef.current.fillColor
+              : STICKER_COLOR;
+          // Top-left origin in world coords; sticker is centered on click point.
+          const sx = pointer.x - STICKER_SIZE / 2;
+          const sy = pointer.y - STICKER_SIZE / 2;
+          const rect = new fab.Rect({
+            left: sx,
+            top: sy,
+            width: STICKER_SIZE,
+            height: STICKER_SIZE,
+            fill: stickerColor,
+            stroke: 'transparent',
+            strokeWidth: 0,
+            rx: 2, ry: 2,
+            shadow: new fab.Shadow({
+              color: 'rgba(0,0,0,0.18)',
+              blur: 10,
+              offsetX: 0,
+              offsetY: 3,
+            }),
+          });
+          const textbox = new fab.Textbox('', {
+            left: sx + STICKER_PAD,
+            top: sy + STICKER_PAD,
+            width: STICKER_SIZE - STICKER_PAD * 2,
+            fontSize: STICKER_FONT_SIZE,
+            fontFamily: 'Arial, sans-serif',
+            fill: STICKER_TEXT_COLOR,
             textAlign: 'center',
-            backgroundColor: bg,
-            padding: 20,
+            // Wrap by grapheme so long unbroken strings stay
+            // inside the sticker; otherwise fabric would expand
+            // the textbox width to fit a single long "word".
+            splitByGrapheme: true,
+            dynamicMinWidth: 0,
+            lockScalingFlip: true,
+          });
+          const sticker = new fab.Group([rect, textbox], {
             selectable: true,
             evented: true,
-            lockScalingFlip: true,
-            // `data` is Fabric's standard serialisable bag — always saved in toJSON.
-            // isSticky lets patchStickyNote identify this object after loading.
-            // minH is the user-set minimum height, persisted across saves.
-            data: { isSticky: true, minH: SIZE },
-          } as any);
-
-          // ── Custom background: rounded corners + Miro-style fold ──
-          applyStickyRenderBg(note);
-
-          // ── Runtime min-height (mirrors data.minH for fast access) ──
-          (note as any)._stickyMinH = SIZE;
-          const _origInit: () => void = (note as any).initDimensions.bind(note);
-          (note as any).initDimensions = function (this: any) {
-            _origInit();
-            const min = this._stickyMinH ?? SIZE;
-            if (this.height < min) this.height = min;
-          };
-          (note as any).initDimensions();
-
-          // ── Controls: sides + bottom + rotation; no corners ──────
-          note.setControlsVisibility({
-            tl: false, tr: false, bl: false, br: false,
-            mt: false,
-            mb: true,  // ↕ drag down to make taller
-            ml: true,  // ↔ Fabric Textbox handles ml/mr natively (no scaling event)
-            mr: true,
-            mtr: true, // rotation
+            subTargetCheck: false,
           });
-
-          // ── Height resize (mb fires scaling; ml/mr are Textbox-native) ──
-          note.on('scaling', function (this: any) {
-            const newH = Math.max(60, this.height * this.scaleY);
-            this._stickyMinH = newH;
-            this.data = { ...this.data, minH: newH }; // keep data.minH in sync
-            this.height = newH;
-            this.scaleX = 1;
-            this.scaleY = 1;
-            this.setCoords();
-          });
-
-          // Mark as fully set up BEFORE canvas.add so patchStickyNote skips it.
-          (note as any)._stickyPatched = true;
-          canvas.add(note);
-          canvas.setActiveObject(note);
-          note.enterEditing();
-          note.on('editing:exited', () => {
-            if (!note.text) {
-              // Keep the note even if empty — user can type later
-            }
-            pushHistory();
-          });
+          (sticker as any).data = { isSticker: true };
+          canvas.add(sticker);
+          canvas.setActiveObject(sticker);
+          canvas.requestRenderAll();
+          pushHistory();
+          setTimeout(() => enterStickerEdit(sticker), 0);
           return;
         }
 
@@ -738,15 +760,23 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         const cr = containerRef.current!.getBoundingClientRect();
         const isMulti = obj.type === 'active-selection';
         const first = isMulti ? (obj as any).getObjects()[0] : obj;
+        const isSticker = !!((obj as any)?.data?.isSticker || (first as any)?.data?.isSticker);
+
+        let fillColor = first?.fill == null || first?.fill === '' ? 'transparent' : (first?.fill as string);
+        if (isSticker) {
+          const innerRect = (first?.getObjects?.() || []).find((o: any) => o.type === 'rect');
+          if (innerRect?.fill) fillColor = innerRect.fill as string;
+        }
+
         return {
           bounds: { x: cr.left + rect.left, y: cr.top + rect.top, w: rect.width, h: rect.height },
           strokeColor: (first?.stroke as string) || '#1a1a2e',
-          fillColor: first?.fill == null || first?.fill === '' ? 'transparent' : (first?.fill as string),
+          fillColor,
           strokeWidth: typeof first?.strokeWidth === 'number' ? first.strokeWidth : 2,
           fontSize: typeof first?.fontSize === 'number' ? first.fontSize : 16,
           objectType: obj.type || 'unknown',
-          isSticky: !!(first as any)?.data?.isSticky,
           isMulti,
+          isSticker,
         };
       };
 
@@ -863,7 +893,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       try { canvas?.dispose(); } catch (_) {}
       fc.current = null;
     };
-  }, [patchStickyNote]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Imperative API ────────────────────────────────────────────
   useImperativeHandle(ref, () => ({
@@ -872,10 +902,6 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       if (!c || hIdx.current <= 0) return;
       hIdx.current--;
       c.loadFromJSON(JSON.parse(history.current[hIdx.current])).then(() => {
-        // Re-apply sticky-note patches: object:added doesn't always fire
-        // during Fabric v6's loadFromJSON, so we re-run patchStickyNote
-        // explicitly to restore _renderBackground + initDimensions overrides.
-        c.getObjects().forEach((o: any) => patchStickyNote(o));
         c.renderAll();
         applyTool(c, pRef.current.tool);
         pRef.current.onHistoryChange(
@@ -889,7 +915,6 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       if (!c || hIdx.current >= history.current.length - 1) return;
       hIdx.current++;
       c.loadFromJSON(JSON.parse(history.current[hIdx.current])).then(() => {
-        c.getObjects().forEach((o: any) => patchStickyNote(o));
         c.renderAll();
         applyTool(c, pRef.current.tool);
         pRef.current.onHistoryChange(
@@ -986,7 +1011,6 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       try {
         const json = typeof state === 'string' ? JSON.parse(state) : state;
         c.loadFromJSON(json).then(() => {
-          c.getObjects().forEach((o: any) => patchStickyNote(o));
           c.renderAll();
           applyTool(c, pRef.current.tool);
           applyBackground(c, pRef.current.bgStyle);
@@ -1021,9 +1045,22 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       const c = fc.current;
       if (!c) return;
       c.getActiveObjects().forEach((obj: any) => {
+        // Sticker: recolor the inner rect (the group itself has
+        // no visible fill).
+        if (obj?.data?.isSticker) {
+          if (fill !== undefined && fill !== 'transparent') {
+            const innerRect = obj.getObjects?.().find((o: any) => o.type === 'rect');
+            if (innerRect) {
+              innerRect.set({ fill });
+              obj.dirty = true;
+              obj._set?.('dirty', true);
+            }
+          }
+          return;
+        }
         if (stroke !== undefined) obj.set({ stroke });
         if (fill !== undefined) {
-          if (obj.type === 'i-text' || (obj.type === 'textbox' && !obj.data?.isSticky)) {
+          if (obj.type === 'i-text' || obj.type === 'textbox') {
             obj.set({ fill });
           } else if (obj.type !== 'textbox') {
             obj.set({ fill });

@@ -12,6 +12,8 @@ const db = globalForDb._db;
 
 // Enable WAL mode for better concurrent read performance
 db.pragma('journal_mode = WAL');
+// Wait up to 10s if database is locked (fixes SQLITE_BUSY during Next.js build)
+db.pragma('busy_timeout = 10000');
 
 // Create all tables if they don't exist yet (safe to run on every boot)
 db.exec(`

@@ -755,16 +755,41 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       canvas.on('selection:updated', () => pRef.current.onSelectionChange(true, getSelectionInfo()));
       canvas.on('selection:cleared', () => pRef.current.onSelectionChange(false));
 
-      // Update toolbar position on every render (pan/zoom/move), throttled via RAF
+      // Hide floating toolbar while dragging/resizing to avoid jitter
+      let isDragging = false;
+      canvas.on('object:moving', () => {
+        if (!isDragging) {
+          isDragging = true;
+          pRef.current.onSelectionChange(false);
+        }
+      });
+      canvas.on('object:scaling', () => {
+        if (!isDragging) {
+          isDragging = true;
+          pRef.current.onSelectionChange(false);
+        }
+      });
+      canvas.on('object:rotating', () => {
+        if (!isDragging) {
+          isDragging = true;
+          pRef.current.onSelectionChange(false);
+        }
+      });
+      canvas.on('object:modified', () => {
+        isDragging = false;
+        pRef.current.onSelectionChange(true, getSelectionInfo());
+      });
+
+      // Update toolbar position on pan/zoom (not during drag), throttled via RAF
       let rafPending = false;
       canvas.on('after:render', () => {
-        if (rafPending) return;
+        if (rafPending || isDragging) return;
         const obj = canvas.getActiveObject();
         if (!obj) return;
         rafPending = true;
         requestAnimationFrame(() => {
           rafPending = false;
-          if (!canvas.getActiveObject()) return;
+          if (!canvas.getActiveObject() || isDragging) return;
           pRef.current.onSelectionChange(true, getSelectionInfo());
         });
       });

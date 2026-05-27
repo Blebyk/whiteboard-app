@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       html: `
         <h1>Подтверждение email</h1>
         <p>Вы запросили повторную отправку письма. Перейдите по ссылке ниже:</p>
-        <a href="${process.env.APP_URL || 'http://localhost:3000'}/api/auth/verify-email?token=${verificationToken}">
+        <a href="${process.env.APP_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}">
           Подтвердить email
         </a>
         <p>Ссылка действительна 24 часа.</p>

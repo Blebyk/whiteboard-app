@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
 
     const resend = new Resend(process.env.RESEND_API_KEY);
     await resend.emails.send({
-      from: 'onboarding@resend.dev',
+      from: 'noreply@whiteboard-app.com',
       to: email,
       subject: 'Сброс пароля — Whiteboard',
       html: `

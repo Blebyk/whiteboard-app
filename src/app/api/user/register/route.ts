@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
 
     try {
       await resend.emails.send({
-        from: 'onboarding@resend.dev',
+        from: 'noreply@whiteboard-app.com',
         to: email,
         subject: 'Подтвердите ваш email',
         html: `

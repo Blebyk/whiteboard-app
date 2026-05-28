@@ -89,4 +89,27 @@ if (!boardCols.map((c) => c.name).includes('updated_by')) {
   db.exec('ALTER TABLE boards ADD COLUMN updated_by INTEGER');
 }
 
+// Real-time object-level sync.
+// `rev` is a per-board monotonic revision counter used as the sync cursor.
+if (!boardCols.map((c) => c.name).includes('rev')) {
+  db.exec('ALTER TABLE boards ADD COLUMN rev INTEGER NOT NULL DEFAULT 0');
+}
+
+// One row per canvas object. `data` is the fabric JSON (NULL when deleted —
+// kept as a tombstone so peers learn about removals). Every change stamps the
+// board's new `rev`, letting clients pull only what changed since they last saw.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS board_objects (
+    boardId    INTEGER NOT NULL,
+    objectId   TEXT NOT NULL,
+    data       TEXT,
+    deleted    INTEGER NOT NULL DEFAULT 0,
+    rev        INTEGER NOT NULL DEFAULT 0,
+    updated_by INTEGER,
+    PRIMARY KEY (boardId, objectId),
+    FOREIGN KEY (boardId) REFERENCES boards(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_board_objects_rev ON board_objects(boardId, rev);
+`);
+
 export default db;

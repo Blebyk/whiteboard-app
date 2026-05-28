@@ -35,6 +35,13 @@ export interface SelectionInfo {
 }
 
 
+export interface RemoteChange {
+  objectId: string;
+  data?: any;
+  deleted?: boolean;
+  updated_by?: number | null;
+}
+
 export interface CanvasRef {
   undo(): void;
   redo(): void;
@@ -49,6 +56,14 @@ export interface CanvasRef {
   loadState(state: string): void;
   addImage(dataUrl: string): void;
   applyToSelection(props: { stroke?: string; fill?: string; strokeWidth?: number; fontSize?: number }): void;
+  /** True while the user is actively drawing/panning/dragging/editing or has a multi-selection. */
+  isBusy(): boolean;
+  /** Per-object snapshot (keyed by stable id) + canvas-level meta, for diffing.
+   *  `held` lists ids being edited right now: excluded from the push but must NOT
+   *  be treated as deletions. Returns null while a gesture makes coords unstable. */
+  getSyncState(): { objects: Record<string, any>; meta: any; held: string[] } | null;
+  /** Merge peer object changes in place. Returns the ids it resolved (applied/already-current/already-gone). */
+  applyRemoteChanges(changes: RemoteChange[]): Promise<{ applied: string[] }>;
 }
 
 export interface CanvasProps {
@@ -63,6 +78,17 @@ export interface CanvasProps {
   onHistoryChange(canUndo: boolean, canRedo: boolean): void;
   onZoomChange(zoom: number): void;
   onSelectionChange(active: boolean, info?: SelectionInfo): void;
+  /** Fired once after the initial canvas state has been loaded. */
+  onReady?(): void;
+  /** Fired on every committed local mutation (for debounced sync). */
+  onChange?(): void;
+}
+
+/** Stable id for an object, used to merge changes across collaborators. */
+function genId(): string {
+  const c = (globalThis as any).crypto;
+  if (c?.randomUUID) return c.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
 const CURSORS: Record<string, string> = {
@@ -131,6 +157,15 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
   const midPanning = useRef(false);
   const midPanStart = useRef({ x: 0, y: 0 });
 
+  // True while an object is being moved/scaled/rotated (used to defer remote
+  // merges and toolbar repositioning so we never yank an object mid-drag).
+  const draggingRef = useRef(false);
+
+  // Id of the sticker group currently being text-edited. While editing, the
+  // group is decomposed into transient pieces; we "hold" this id so the sync
+  // layer doesn't push the half-baked state or mistake the absence for a delete.
+  const editingStickerId = useRef<string | null>(null);
+
 
   // Background handler ref (for cleanup on style change)
   const bgHandlerRef = useRef<(() => void) | null>(null);
@@ -139,12 +174,13 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
   const pushHistory = useCallback(() => {
     const c = fc.current;
     if (!c) return;
-    const snap = JSON.stringify(c.toJSON(['data']));
+    const snap = JSON.stringify(c.toObject(['data']));
     history.current = history.current.slice(0, hIdx.current + 1);
     history.current.push(snap);
     if (history.current.length > 60) history.current.shift();
     hIdx.current = history.current.length - 1;
     pRef.current.onHistoryChange(hIdx.current > 0, false);
+    pRef.current.onChange?.();
   }, []);
 
   // ─── Apply tool to canvas ──────────────────────────────────────
@@ -339,8 +375,9 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         }
       }
 
-      history.current = [JSON.stringify(canvas.toJSON(['data']))];
+      history.current = [JSON.stringify(canvas.toObject(['data']))];
       hIdx.current = 0;
+      pRef.current.onReady?.();
 
       // ── Sticker helpers ─────────────────────────────────────
       // A sticker is a Group(Rect + Textbox). To edit the inner
@@ -388,6 +425,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         if (!sticker || !sticker.data?.isSticker) return false;
         if ((sticker.scaleX ?? 1) === 1 && (sticker.scaleY ?? 1) === 1) return false;
 
+        const stickerId = sticker.data?.id;
         const items: any[] = sticker.removeAll();
         canvas.remove(sticker);
 
@@ -427,7 +465,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
           evented: true,
           subTargetCheck: false,
         });
-        (newGroup as any).data = { isSticker: true };
+        (newGroup as any).data = { isSticker: true, id: stickerId };
         canvas.add(newGroup);
         canvas.setActiveObject(newGroup);
         canvas.requestRenderAll();
@@ -437,6 +475,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       const enterStickerEdit = (sticker: any) => {
         if (!sticker || !sticker.data?.isSticker) return;
 
+        const stickerId = sticker.data?.id;
         const items: any[] = sticker.removeAll();
         canvas.remove(sticker);
 
@@ -448,6 +487,12 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         textbox.set({ selectable: true, evented: true });
         rect.setCoords();
         textbox.setCoords();
+
+        // While editing, these are transient pieces — keep them out of sync and
+        // hold the group's id so peers don't see the sticker vanish/flicker.
+        rect.excludeFromSync = true;
+        textbox.excludeFromSync = true;
+        editingStickerId.current = stickerId ?? null;
 
         const onChange = () => fitStickerText(rect, textbox);
         fitStickerText(rect, textbox);
@@ -467,13 +512,18 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
           canvas.remove(rect);
           canvas.remove(textbox);
 
+          // Editing done: clear the transient markers and re-group.
+          delete rect.excludeFromSync;
+          delete textbox.excludeFromSync;
+          editingStickerId.current = null;
+
           rect.set({ selectable: true, evented: true });
           const newGroup = new fab.Group([rect, textbox], {
             selectable: pRef.current.tool === 'select',
             evented: pRef.current.tool === 'select' || pRef.current.tool === 'eraser',
             subTargetCheck: false,
           });
-          (newGroup as any).data = { isSticker: true };
+          (newGroup as any).data = { isSticker: true, id: stickerId };
           canvas.add(newGroup);
           if (pRef.current.tool === 'select') {
             canvas.setActiveObject(newGroup);
@@ -786,40 +836,39 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       canvas.on('selection:cleared', () => pRef.current.onSelectionChange(false));
 
       // Hide floating toolbar while dragging/resizing to avoid jitter
-      let isDragging = false;
       canvas.on('object:moving', () => {
-        if (!isDragging) {
-          isDragging = true;
+        if (!draggingRef.current) {
+          draggingRef.current = true;
           pRef.current.onSelectionChange(false);
         }
       });
       canvas.on('object:scaling', () => {
-        if (!isDragging) {
-          isDragging = true;
+        if (!draggingRef.current) {
+          draggingRef.current = true;
           pRef.current.onSelectionChange(false);
         }
       });
       canvas.on('object:rotating', () => {
-        if (!isDragging) {
-          isDragging = true;
+        if (!draggingRef.current) {
+          draggingRef.current = true;
           pRef.current.onSelectionChange(false);
         }
       });
       canvas.on('object:modified', () => {
-        isDragging = false;
+        draggingRef.current = false;
         pRef.current.onSelectionChange(true, getSelectionInfo());
       });
 
       // Update toolbar position on pan/zoom (not during drag), throttled via RAF
       let rafPending = false;
       canvas.on('after:render', () => {
-        if (rafPending || isDragging) return;
+        if (rafPending || draggingRef.current) return;
         const obj = canvas.getActiveObject();
         if (!obj) return;
         rafPending = true;
         requestAnimationFrame(() => {
           rafPending = false;
-          if (!canvas.getActiveObject() || isDragging) return;
+          if (!canvas.getActiveObject() || draggingRef.current) return;
           pRef.current.onSelectionChange(true, getSelectionInfo());
         });
       });
@@ -908,6 +957,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
           hIdx.current > 0,
           hIdx.current < history.current.length - 1
         );
+        pRef.current.onChange?.();
       });
     },
     redo() {
@@ -921,6 +971,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
           hIdx.current > 0,
           hIdx.current < history.current.length - 1
         );
+        pRef.current.onChange?.();
       });
     },
     zoomIn() {
@@ -1003,7 +1054,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
     getState() {
       const c = fc.current;
       if (!c) return '';
-      return JSON.stringify(c.toJSON(['data']));
+      return JSON.stringify(c.toObject(['data']));
     },
     loadState(state: string) {
       const c = fc.current;
@@ -1014,7 +1065,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
           c.renderAll();
           applyTool(c, pRef.current.tool);
           applyBackground(c, pRef.current.bgStyle);
-          history.current = [JSON.stringify(c.toJSON(['data']))];
+          history.current = [JSON.stringify(c.toObject(['data']))];
           hIdx.current = 0;
           pRef.current.onHistoryChange(false, false);
         });
@@ -1083,6 +1134,129 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       });
       c.requestRenderAll();
       pushHistory();
+    },
+    isBusy() {
+      if (drawing.current || panning.current || midPanning.current || draggingRef.current) return true;
+      const c = fc.current;
+      if (!c) return false;
+      const ao = c.getActiveObject();
+      // Editing text or holding a multi-selection ⇒ coordinates are in flux;
+      // defer both pushing and applying remote changes until idle.
+      if (ao && (ao.isEditing || ao.type === 'activeselection')) return true;
+      return false;
+    },
+    getSyncState() {
+      const c = fc.current;
+      if (!c) return null;
+      // Coordinates are globally unstable mid-gesture / multi-selection — retry later.
+      if (drawing.current || panning.current || midPanning.current || draggingRef.current) return null;
+      const ao = c.getActiveObject();
+      if (ao && ao.type === 'activeselection') return null;
+
+      // Assign ids to any object that still lacks one (new shapes, legacy data),
+      // but never to transient pieces of a sticker that's mid-text-edit.
+      c.getObjects().forEach((o: any) => {
+        if (o.excludeFromSync) return;
+        if (!o.data || typeof o.data !== 'object') o.data = {};
+        if (!o.data.id) o.data.id = genId();
+      });
+
+      // The object the user is editing right now is excluded from the push (its
+      // content is in flux) and reported as "held" so the caller keeps it rather
+      // than treating its absence as a deletion. For a sticker the live group is
+      // decomposed into transient pieces, so we hold the original group id.
+      const held: string[] = [];
+      let editingId: string | null = null;
+      if (ao && ao.isEditing) {
+        editingId = editingStickerId.current || (ao.data && ao.data.id) || null;
+        if (editingId) held.push(editingId);
+      }
+
+      const full = c.toObject(['data']);
+      const objects: Record<string, any> = {};
+      for (const o of full.objects ?? []) {
+        if (o.excludeFromSync) continue;       // transient sticker-edit pieces
+        const id = o?.data?.id;
+        if (!id || id === editingId) continue; // skip the in-progress object
+        objects[id] = o;
+      }
+      const meta: any = { ...full };
+      delete meta.objects;
+      return { objects, meta, held };
+    },
+    async applyRemoteChanges(changes) {
+      const c = fc.current;
+      const fab = fm.current;
+      if (!c || !fab) return { applied: [] };
+
+      const active = c.getActiveObject();
+      const activeChildren =
+        active?.type === 'activeselection' ? new Set(active.getObjects?.() ?? []) : null;
+      const byId = new Map<string, any>();
+      c.getObjects().forEach((o: any) => {
+        const id = o?.data?.id;
+        if (id) byId.set(id, o);
+      });
+
+      const isLocked = (obj: any) =>
+        obj && (obj === active || obj.isEditing || activeChildren?.has(obj));
+
+      const applied: string[] = [];
+      let changed = false;
+
+      for (const ch of changes) {
+        const existing = byId.get(ch.objectId);
+
+        if (ch.deleted) {
+          if (!existing) { applied.push(ch.objectId); continue; }   // already gone
+          if (isLocked(existing)) continue;                          // defer
+          c.remove(existing);
+          changed = true;
+          applied.push(ch.objectId);
+          continue;
+        }
+
+        if (!ch.data) { applied.push(ch.objectId); continue; }
+
+        if (existing) {
+          try {
+            if (JSON.stringify(existing.toObject(['data'])) === JSON.stringify(ch.data)) {
+              applied.push(ch.objectId);   // already up to date
+              continue;
+            }
+          } catch { /* fall through to replace */ }
+          if (isLocked(existing)) continue; // defer overwriting what they're editing
+        }
+
+        let enlivened: any[] = [];
+        try {
+          enlivened = await fab.util.enlivenObjects([ch.data]);
+        } catch { enlivened = []; }
+        const next = enlivened[0];
+        if (!next) continue;
+        next.data = { ...(ch.data.data || {}), id: ch.objectId };
+
+        if (existing) {
+          const idx = c.getObjects().indexOf(existing);
+          c.remove(existing);
+          try { c.insertAt(idx, next); } catch { c.add(next); }
+        } else {
+          c.add(next);
+        }
+        changed = true;
+        applied.push(ch.objectId);
+      }
+
+      if (changed) {
+        applyTool(c, pRef.current.tool);
+        c.requestRenderAll();
+        // Reset the undo baseline so a later undo can't delete objects a peer
+        // just merged in (collaborative undo is out of scope).
+        history.current = [JSON.stringify(c.toObject(['data']))];
+        hIdx.current = 0;
+        pRef.current.onHistoryChange(false, false);
+      }
+      return { applied };
     },
   }), [applyTool, applyBackground, pushHistory]);
 

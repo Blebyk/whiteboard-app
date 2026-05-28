@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getSessionUser } from '@/lib/auth';
 import db from '@/lib/db';
+import { ensureBoardObjects } from '@/lib/boardSync';
 import WhiteboardApp from '@/components/whiteboard/WhiteboardApp';
 
 export const dynamic = 'force-dynamic';
@@ -27,16 +28,22 @@ export default async function BoardPage({ params }: { params: Promise<{ id: stri
     canEdit = share?.role === 'editor';
   }
 
+  // Give existing objects stable ids before first render so every client that
+  // opens this board shares the same ids; then read back the seeded snapshot.
+  ensureBoardObjects(board.id);
+  const synced = db.prepare('SELECT canvasState, rev FROM boards WHERE id = ?')
+    .get(board.id) as { canvasState: string | null; rev: number };
+
   return (
     <WhiteboardApp
       boardId={board.id}
       boardName={board.name}
-      initialState={board.canvasState || null}
+      initialState={synced.canvasState || null}
       initialBgStyle={board.bgStyle || 'dots'}
       isOwner={isOwner}
       canEdit={canEdit}
       currentUserId={user.id}
-      initialUpdatedAt={board.updated_at ?? ''}
+      initialRev={synced.rev ?? 0}
     />
   );
 }

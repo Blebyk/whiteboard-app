@@ -10,6 +10,7 @@
 - **[Fabric.js 6](http://fabricjs.com/)** — canvas-редактор
 - **[SQLite](https://www.sqlite.org/)** через **[better-sqlite3](https://github.com/WiseLibs/better-sqlite3)** — база данных
 - **[Resend](https://resend.com/)** — отправка email верификации
+- **Server-Sent Events (SSE)** — синхронизация изменений в реальном времени
 - **TypeScript**
 
 ---
@@ -46,7 +47,7 @@
 - **Зум** — колесо мыши, Ctrl+±, диапазон 5%–2000%
 - **Fit to screen** — Ctrl+0
 - **Фон** — без фона / точки / сетка (синхронизирован с зумом и паном, сохраняется в БД)
-- **Автосохранение** каждые 30 секунд
+- **Автосохранение** — по изменению, дебаунс ~0.2 с (+ периодический бэкстоп на случай сетевой ошибки)
 - **Экспорт PNG** — 2× качество
 - **strokeUniform** — толщина обводки не растягивается при масштабировании
 
@@ -56,7 +57,7 @@
 - **Редактор** — может рисовать, редактировать и сохранять доску
 - **Зритель** — видит доску в режиме «Только просмотр», может панорамировать и масштабировать
 - Роль можно сменить в любой момент — клик по бейджу роли у пользователя в списке
-- **Синхронизация в реальном времени** — изменения другого пользователя подгружаются автоматически (опрос каждые 3 секунды)
+- **Синхронизация в реальном времени** — изменения доставляются мгновенно через **Server-Sent Events** и сливаются **по-объектно**: двое могут одновременно править *разные* объекты без затирания. Резервный опрос раз в 5 секунд на случай обрыва SSE (одновременная правка *одного* объекта — last-writer-wins)
 - Только владелец может **переименовывать, удалять** доску и **управлять доступом**
 - Шареный пользователь может **убрать доску у себя**, не удаляя её у остальных
 - На дашборде шареные доски помечены бейджем **«ПОДЕЛЕНО»** и подписью «от {владелец}»
@@ -94,7 +95,8 @@ whiteboard/
 │   │   │   │   └── [id]/
 │   │   │   │       ├── route.ts             # GET / PUT / DELETE доска
 │   │   │   │       ├── share/route.ts       # GET / POST / PATCH / DELETE доступ + роли
-│   │   │   │       └── sync/route.ts        # GET updated_at/updated_by (real-time polling)
+│   │   │   │       ├── sync/route.ts        # GET (pull диффа по rev) / POST (push изменённых объектов)
+│   │   │       └── events/route.ts      # SSE-стрим изменений (real-time push)
 │   │   │   └── user/
 │   │   │       └── register/route.ts        # Регистрация
 │   │   ├── board/[id]/page.tsx              # Редактор доски
@@ -119,10 +121,13 @@ whiteboard/
 │   │   └── dashboard/
 │   │       └── DashboardClient.tsx          # Клиентский дашборд
 │   ├── lib/
-│   │   └── auth.ts                          # getSessionUser()
+│   │   ├── auth.ts                          # getSessionUser()
+│   │   ├── db.ts                            # реэкспорт корневого lib/db.ts
+│   │   ├── boardSync.ts                     # сидинг ids + применение диффа объектов
+│   │   └── boardEvents.ts                   # in-process pub/sub для SSE
 │   └── middleware.ts                        # Защита маршрутов
 ├── lib/
-│   └── db.ts                                # SQLite, singleton, создание таблиц
+│   └── db.ts                                # SQLite (WAL, singleton), схема + миграции
 ├── .env.example                             # Шаблон переменных окружения
 └── README.md
 ```
@@ -165,9 +170,24 @@ SQLite БД создаётся автоматически при первом з
 | `canvasState` | TEXT | JSON состояние холста |
 | `thumbnail` | TEXT | Base64 превью |
 | `bgStyle` | TEXT | `none` / `grid` / `dots` |
-| `updated_by` | INTEGER FK | Кто последним сохранил (для real-time sync) |
+| `updated_by` | INTEGER FK | Кто последним сохранил |
+| `rev` | INTEGER | Монотонный счётчик ревизий (курсор синхронизации) |
 | `created_at` | DATETIME | — |
 | `updated_at` | DATETIME | — |
+
+### Таблица `board_objects`
+Per-object хранилище для слияния правок в реальном времени.
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `boardId` | INTEGER FK | Ссылка на доску |
+| `objectId` | TEXT | Стабильный id объекта (`data.id`) |
+| `data` | TEXT | JSON объекта (`NULL`, если удалён) |
+| `deleted` | INTEGER | 0 / 1 (томбстоун удаления) |
+| `rev` | INTEGER | Ревизия доски на момент изменения |
+| `updated_by` | INTEGER | Кто изменил объект |
+
+`PRIMARY KEY (boardId, objectId)`. Клиенты пушат только изменённые объекты и подтягивают изменения с `rev > since`. Сервер пересобирает `boards.canvasState` как денормализованный кэш для первой отрисовки и превью.
 
 ### Таблица `board_shares`
 | Поле | Тип | Описание |
@@ -204,7 +224,7 @@ cp .env.example .env.local
 Заполни `.env.local`:
 ```env
 RESEND_API_KEY=re_xxxxxxx        # resend.com — бесплатный аккаунт
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+APP_URL=http://localhost:3000    # базовый URL для ссылок в письмах верификации
 ```
 
 > **Без `RESEND_API_KEY`** приложение работает, но письма верификации не отправляются.
@@ -215,6 +235,8 @@ npm run dev
 ```
 
 Открой [http://localhost:3000](http://localhost:3000)
+
+> **Деплой:** нужен хост с постоянным диском и Node-рантаймом — `better-sqlite3` не работает на serverless/edge (Vercel/Netlify). SSE-синхронизация рассчитана на один процесс; при нескольких инстансах real-time деградирует до резервного опроса (потребуется внешний pub/sub, напр. Redis).
 
 ---
 
@@ -247,7 +269,11 @@ npm run dev
 - `GET /api/boards/[id]/share` — список пользователей с доступом и ролями (только владелец)
 - `PATCH /api/boards/[id]/share` — сменить роль пользователя (только владелец)
 - `DELETE /api/boards/[id]/share?userId=N` — забрать доступ (только владелец)
-- `GET /api/boards/[id]/sync` — лёгкий опрос: `updated_at` и `updated_by` без canvas-состояния
+
+### Синхронизация (real-time)
+- `GET /api/boards/[id]/sync?since=<rev>` — изменения объектов с `rev > since`: `{ rev, changes[] }`
+- `POST /api/boards/[id]/sync` — пуш диффа изменённых/удалённых объектов (только редактор)
+- `GET /api/boards/[id]/events` — SSE-стрим: толкает `{ rev, by }` при каждом изменении доски
 
 ### Аутентификация
 - `POST /api/user/register` — регистрация + отправка письма верификации

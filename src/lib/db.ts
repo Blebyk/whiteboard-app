@@ -1,21 +1,4 @@
-import Database from 'better-sqlite3';
-import path from 'path';
-
-const dbPath = path.join(process.cwd(), 'whiteboard.db');
-
-const db = new Database(dbPath);
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE,
-    password TEXT NOT NULL,
-    emailVerified INTEGER DEFAULT 0,
-    verificationToken TEXT,
-    tokenExpiry TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`);
-
-export default db;
+// `@/lib/db` resolves here. The full schema, WAL/busy_timeout pragmas and the
+// HMR-safe singleton connection live in the repo-root db module; re-export it so
+// the whole app shares one connection and one source of truth for the schema.
+export { default } from '../../lib/db';

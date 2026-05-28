@@ -16,12 +16,12 @@ interface Props {
   isOwner: boolean;
   canEdit: boolean;
   currentUserId: number;
-  initialUpdatedAt: string;
+  initialRev: number;
 }
 
 export default function WhiteboardApp({
   boardId, boardName, initialState, initialBgStyle,
-  isOwner, canEdit, currentUserId, initialUpdatedAt,
+  isOwner, canEdit, currentUserId, initialRev,
 }: Props) {
   const canvasRef = useRef<CanvasRef>(null);
 
@@ -31,9 +31,7 @@ export default function WhiteboardApp({
   const [strokeWidth, setStrokeWidth] = useState(2);
   const [fontSize, setFontSize] = useState(16);
   const [bgStyle, setBgStyle] = useState<'none' | 'grid' | 'dots'>(initialBgStyle ?? 'dots');
-  const bgStyleRef = useRef(bgStyle);
   const isMounted = useRef(false);
-  useEffect(() => { bgStyleRef.current = bgStyle; }, [bgStyle]);
 
   const [zoom, setZoom] = useState(100);
   const [canUndo, setCanUndo] = useState(false);
@@ -43,9 +41,15 @@ export default function WhiteboardApp({
   const [name, setName] = useState(boardName);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
 
-  // Track last known server state for sync polling
-  const lastSyncedAt = useRef<string>(initialUpdatedAt);
-  const isSyncing = useRef(false);
+  // ─── Object-level sync state ──────────────────────────────────
+  const lastRev = useRef<number>(initialRev);              // highest server rev we've applied
+  const syncedSnapshot = useRef<Record<string, string>>({}); // id → JSON of last-synced object
+  const readyRef = useRef(false);                          // canvas finished initial load
+  const isSyncing = useRef(false);                         // a pull is in flight
+  const savingRef = useRef(false);                         // a push is in flight
+  const pendingSaveRef = useRef(false);                    // local edits await a push
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pushRef = useRef<() => void>(() => {});            // always-latest pushChanges
 
   // ─── Save bgStyle immediately on change (skip first mount) ────
   useEffect(() => {
@@ -58,42 +62,156 @@ export default function WhiteboardApp({
     });
   }, [bgStyle, boardId, canEdit]);
 
-  // ─── Auto-save every 30s (editors only) ───────────────────────
+  // Build the baseline snapshot once the canvas has loaded the initial state.
+  const handleReady = useCallback(() => {
+    const state = canvasRef.current?.getSyncState();
+    if (state) {
+      const snap: Record<string, string> = {};
+      for (const id in state.objects) snap[id] = JSON.stringify(state.objects[id]);
+      syncedSnapshot.current = snap;
+    }
+    readyRef.current = true;
+  }, []);
+
+  // ─── Push local object changes (diff vs last-synced snapshot) ──
+  const pushChanges = useCallback(async () => {
+    const c = canvasRef.current;
+    if (!c || !canEdit || !readyRef.current || savingRef.current) return;
+    // null ⇒ a gesture makes coordinates unstable (drawing/dragging/multi-select).
+    // Retry shortly. Note: this does NOT block while text-editing — committed
+    // objects still push; only the in-progress one is held back (see `held`).
+    const state = c.getSyncState();
+    if (!state) {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => pushRef.current(), 250);
+      return;
+    }
+
+    const current: Record<string, string> = {};
+    for (const id in state.objects) current[id] = JSON.stringify(state.objects[id]);
+    const held = new Set(state.held);
+
+    const changes: Array<{ objectId: string; data?: any; deleted?: boolean }> = [];
+    for (const id in current) {
+      if (current[id] !== syncedSnapshot.current[id]) changes.push({ objectId: id, data: state.objects[id] });
+    }
+    for (const id in syncedSnapshot.current) {
+      // Absent because it's being edited (held) ⇒ not a deletion.
+      if (!(id in current) && !held.has(id)) changes.push({ objectId: id, deleted: true });
+    }
+
+    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
+    pendingSaveRef.current = false;
+    if (changes.length === 0) { setSaveStatus('saved'); return; }
+
+    savingRef.current = true;
+    setSaveStatus('saving');
+    try {
+      const res = await fetch(`/api/boards/${boardId}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ changes, meta: state.meta, thumbnail: c.getThumbnail() }),
+      });
+      if (!res.ok) throw new Error('save failed');
+      const { rev } = await res.json();
+      if (typeof rev === 'number') lastRev.current = rev;
+      // Commit exactly what we sent; edits made during the request stay dirty.
+      for (const ch of changes) {
+        if (ch.deleted) delete syncedSnapshot.current[ch.objectId];
+        else syncedSnapshot.current[ch.objectId] = JSON.stringify(ch.data);
+      }
+      setSaveStatus('saved');
+    } catch {
+      pendingSaveRef.current = true;
+      setSaveStatus('unsaved');
+    } finally {
+      savingRef.current = false;
+      // Edits that landed mid-request (or a failed push) get flushed promptly.
+      if (pendingSaveRef.current) {
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(() => pushRef.current(), 200);
+      }
+    }
+  }, [boardId, canEdit]);
+
+  useEffect(() => { pushRef.current = pushChanges; }, [pushChanges]);
+
+  // Debounced save fired on every local edit.
+  const scheduleSave = useCallback(() => {
+    if (!canEdit) return;
+    pendingSaveRef.current = true;
+    setSaveStatus('unsaved');
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => pushRef.current(), 200);
+  }, [canEdit]);
+
+  // ─── Pull peer changes and merge them object-by-object ────────
+  // Triggered instantly by SSE; also runs on a slow fallback interval.
+  const pullNow = useCallback(async () => {
+    if (!readyRef.current || isSyncing.current) return;
+    isSyncing.current = true;
+    try {
+      const res = await fetch(`/api/boards/${boardId}/sync?since=${lastRev.current}`);
+      if (!res.ok) return;
+      const { rev, changes } = await res.json();
+      if (typeof rev !== 'number') return;
+
+      const incoming = (changes ?? []).filter((ch: any) => ch.updated_by !== currentUserId);
+      if (incoming.length === 0) { lastRev.current = rev; return; }
+
+      // Don't merge while the local user is mid-interaction; retry next tick.
+      if (canvasRef.current?.isBusy()) return;
+
+      const { applied } = await canvasRef.current!.applyRemoteChanges(incoming);
+      const appliedSet = new Set(applied);
+      for (const ch of incoming) {
+        if (!appliedSet.has(ch.objectId)) continue;
+        if (ch.deleted) delete syncedSnapshot.current[ch.objectId];
+        else syncedSnapshot.current[ch.objectId] = JSON.stringify(ch.data);
+      }
+      // Advance the cursor only once the whole batch is merged, so anything
+      // deferred (a locked object) is re-offered on the next pull.
+      if (applied.length === incoming.length) lastRev.current = rev;
+    } catch {
+      // ignore network errors
+    } finally {
+      isSyncing.current = false;
+    }
+  }, [boardId, currentUserId]);
+
+  // Real-time: server pushes a "rev changed" signal → pull immediately.
+  useEffect(() => {
+    let es: EventSource | null = null;
+    let closed = false;
+    try {
+      es = new EventSource(`/api/boards/${boardId}/events`);
+      es.onmessage = (e) => {
+        if (closed) return;
+        try {
+          const { rev, by } = JSON.parse(e.data);
+          if (typeof rev === 'number' && by !== currentUserId && rev > lastRev.current) pullNow();
+        } catch { /* ignore malformed */ }
+      };
+      // EventSource reconnects automatically on error; nothing to do here.
+    } catch { /* EventSource unavailable */ }
+    return () => { closed = true; es?.close(); };
+  }, [boardId, currentUserId, pullNow]);
+
+  // Fallback poll (covers missed SSE events / multi-process / SSE down).
+  useEffect(() => {
+    const interval = setInterval(() => pullNow(), 5_000);
+    return () => clearInterval(interval);
+  }, [pullNow]);
+
+  // ─── Backstop: flush pending edits if a push previously failed ─
   useEffect(() => {
     if (!canEdit) return;
-    const interval = setInterval(() => triggerSave(), 30_000);
+    const interval = setInterval(() => { if (pendingSaveRef.current) pushRef.current(); }, 15_000);
     return () => clearInterval(interval);
-  }, [boardId, canEdit]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [canEdit]);
 
-  // ─── Real-time sync polling every 3s ──────────────────────────
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      if (isSyncing.current) return;
-      isSyncing.current = true;
-      try {
-        const res = await fetch(`/api/boards/${boardId}/sync`);
-        if (!res.ok) return;
-        const { updated_at, updated_by } = await res.json();
-        if (!updated_at) return;
-
-        // Only reload if changed by someone else
-        if (updated_at !== lastSyncedAt.current && updated_by !== currentUserId) {
-          lastSyncedAt.current = updated_at;
-          const full = await fetch(`/api/boards/${boardId}`);
-          if (!full.ok) return;
-          const { board } = await full.json();
-          if (board?.canvasState) {
-            canvasRef.current?.loadState(board.canvasState);
-          }
-        }
-      } catch {
-        // ignore network errors
-      } finally {
-        isSyncing.current = false;
-      }
-    }, 3_000);
-    return () => clearInterval(interval);
-  }, [boardId, currentUserId]);
+  // Flush any pending save on unmount / tab close.
+  useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
 
   // ─── Keyboard shortcuts ───────────────────────────────────────
   useEffect(() => {
@@ -132,28 +250,8 @@ export default function WhiteboardApp({
     return () => window.removeEventListener('keydown', onKey);
   }, [hasSelection, canEdit]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─── Save ─────────────────────────────────────────────────────
-  const triggerSave = useCallback(async () => {
-    const c = canvasRef.current;
-    if (!c || !canEdit) return;
-    setSaveStatus('saving');
-    try {
-      const canvasState = c.getState();
-      const thumbnail = c.getThumbnail();
-      const res = await fetch(`/api/boards/${boardId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ canvasState, thumbnail, bgStyle: bgStyleRef.current }),
-      });
-      const data = await res.json();
-      if (data.board?.updated_at) {
-        lastSyncedAt.current = data.board.updated_at;
-      }
-      setSaveStatus('saved');
-    } catch {
-      setSaveStatus('unsaved');
-    }
-  }, [boardId, canEdit]);
+  // ─── Save (explicit flush: Ctrl+S / toolbar button) ───────────
+  const triggerSave = useCallback(() => { pushChanges(); }, [pushChanges]);
 
   // ─── Rename ───────────────────────────────────────────────────
   const handleRename = useCallback(async (newName: string) => {
@@ -219,6 +317,8 @@ export default function WhiteboardApp({
             fontSize={fontSize}
             bgStyle={bgStyle}
             initialState={initialState}
+            onReady={handleReady}
+            onChange={scheduleSave}
             onHistoryChange={(u, r) => { setCanUndo(u); setCanRedo(r); }}
             onZoomChange={setZoom}
             onSelectionChange={(active, info) => {

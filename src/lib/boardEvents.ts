@@ -1,12 +1,12 @@
-// In-process pub/sub for real-time board updates (SSE transport).
-// A change pushed to a board is published here; open SSE connections for that
-// board forward it to clients, which then pull the diff. Single Node process
-// only — multi-process deployments fall back to the client's polling loop.
-// Kept on globalThis so it survives Next.js dev HMR (like the db singleton).
+// In-process pub/sub для real-time обновлений доски (транспорт SSE).
+// Изменение, запушенное в доску, публикуется здесь; открытые SSE-соединения этой
+// доски пересылают его клиентам, а те подтягивают дифф. Только один процесс Node —
+// при multi-process деплое realtime деградирует до клиентского опроса.
+// Хранится на globalThis, чтобы пережить HMR в dev (как и singleton БД).
 
 export interface BoardEvent {
   rev: number;
-  by: number | null; // userId that caused the change (clients skip their own)
+  by: number | null; // userId, вызвавший изменение (клиенты пропускают свои)
 }
 
 type Listener = (e: BoardEvent) => void;
@@ -30,5 +30,5 @@ export function subscribe(boardId: number, fn: Listener): () => void {
 export function publish(boardId: number, e: BoardEvent): void {
   const set = subs.get(boardId);
   if (!set) return;
-  for (const fn of set) { try { fn(e); } catch { /* ignore bad listener */ } }
+  for (const fn of set) { try { fn(e); } catch { /* игнорируем сбойный слушатель */ } }
 }

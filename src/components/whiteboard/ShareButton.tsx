@@ -95,14 +95,14 @@ export default function ShareButton({ boardId }: ShareButtonProps) {
       if (res.ok) {
         setUsers((prev) => prev ? prev.map((u) => u.id === userId ? { ...u, role: newRole } : u) : null);
       }
-    } catch {/* ignore */}
+    } catch {/* игнорируем */}
   }
 
   async function revoke(userId: number) {
     try {
       const res = await fetch(`/api/boards/${boardId}/share?userId=${userId}`, { method: 'DELETE' });
       if (res.ok) setUsers((prev) => prev ? prev.filter((u) => u.id !== userId) : null);
-    } catch {/* ignore */}
+    } catch {/* игнорируем */}
   }
 
   return (
@@ -138,7 +138,7 @@ export default function ShareButton({ boardId }: ShareButtonProps) {
             Поделиться доской
           </h3>
 
-          {/* Role picker */}
+          {/* Выбор роли */}
           <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
             {(['editor', 'viewer'] as Role[]).map((r) => (
               <button
@@ -210,7 +210,7 @@ export default function ShareButton({ boardId }: ShareButtonProps) {
             </div>
           )}
 
-          {/* Existing shares */}
+          {/* Текущие доступы */}
           <div style={{ marginTop: 16 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
               Доступ есть у
@@ -230,7 +230,7 @@ export default function ShareButton({ boardId }: ShareButtonProps) {
                       </div>
                     </div>
 
-                    {/* Role toggle */}
+                    {/* Переключение роли */}
                     <button
                       onClick={() => changeRole(u.id, u.role === 'editor' ? 'viewer' : 'editor')}
                       title={`Сменить роль на ${u.role === 'editor' ? 'Зритель' : 'Редактор'}`}
@@ -246,7 +246,7 @@ export default function ShareButton({ boardId }: ShareButtonProps) {
                       {ROLE_LABEL[u.role]}
                     </button>
 
-                    {/* Revoke */}
+                    {/* Отозвать */}
                     <button
                       onClick={() => revoke(u.id)}
                       title="Убрать доступ"

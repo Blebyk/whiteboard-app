@@ -56,13 +56,13 @@ export interface CanvasRef {
   loadState(state: string): void;
   addImage(dataUrl: string): void;
   applyToSelection(props: { stroke?: string; fill?: string; strokeWidth?: number; fontSize?: number }): void;
-  /** True while the user is actively drawing/panning/dragging/editing or has a multi-selection. */
+  /** true, пока пользователь активно рисует/панорамирует/тащит/редактирует или держит мультивыделение. */
   isBusy(): boolean;
-  /** Per-object snapshot (keyed by stable id) + canvas-level meta, for diffing.
-   *  `held` lists ids being edited right now: excluded from the push but must NOT
-   *  be treated as deletions. Returns null while a gesture makes coords unstable. */
+  /** Снимок по объектам (по стабильному id) + мета уровня холста, для диффа.
+   *  `held` — id, которые редактируются прямо сейчас: исключены из пуша, но их НЕЛЬЗЯ
+   *  считать удалёнными. Возвращает null, пока жест делает координаты нестабильными. */
   getSyncState(): { objects: Record<string, any>; meta: any; held: string[] } | null;
-  /** Merge peer object changes in place. Returns the ids it resolved (applied/already-current/already-gone). */
+  /** Сливает чужие изменения объектов на месте. Возвращает id, которые обработал (применён/уже актуален/уже удалён). */
   applyRemoteChanges(changes: RemoteChange[]): Promise<{ applied: string[] }>;
 }
 
@@ -78,13 +78,13 @@ export interface CanvasProps {
   onHistoryChange(canUndo: boolean, canRedo: boolean): void;
   onZoomChange(zoom: number): void;
   onSelectionChange(active: boolean, info?: SelectionInfo): void;
-  /** Fired once after the initial canvas state has been loaded. */
+  /** Срабатывает один раз после загрузки начального состояния холста. */
   onReady?(): void;
-  /** Fired on every committed local mutation (for debounced sync). */
+  /** Срабатывает на каждую зафиксированную локальную правку (для синка с дебаунсом). */
   onChange?(): void;
 }
 
-/** Stable id for an object, used to merge changes across collaborators. */
+/** Стабильный id объекта, нужен для слияния изменений между соавторами. */
 function genId(): string {
   const c = (globalThis as any).crypto;
   if (c?.randomUUID) return c.randomUUID();
@@ -114,18 +114,18 @@ const STICKER_FONT_SIZE = 18;
 const STICKER_MIN_FONT = 6;
 const STICKER_TEXT_COLOR = '#1a1a2e';
 
-// Miro-like sticker palette. Used by PropertiesPanel and as the
-// allow-list when deciding whether the current fillColor is a
-// valid sticker color (otherwise falls back to STICKER_COLOR).
+// Палитра стикеров в стиле Miro. Используется PropertiesPanel и как белый
+// список при решении, является ли текущий fillColor допустимым цветом
+// стикера (иначе откат к STICKER_COLOR).
 export const STICKER_COLORS = [
-  '#FFF176', // yellow
-  '#FFD180', // orange
-  '#FF8A80', // pink/red
-  '#F48FB1', // pink
-  '#CE93D8', // purple
-  '#80D8FF', // light blue
-  '#A7FFEB', // mint
-  '#CCFF90', // light green
+  '#FFF176', // жёлтый
+  '#FFD180', // оранжевый
+  '#FF8A80', // розово-красный
+  '#F48FB1', // розовый
+  '#CE93D8', // фиолетовый
+  '#80D8FF', // голубой
+  '#A7FFEB', // мятный
+  '#CCFF90', // светло-зелёный
 ];
 
 const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
@@ -134,43 +134,43 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
   const fc = useRef<any>(null);
   const fm = useRef<any>(null);
 
-  // Always-current props via ref (avoids stale closures in event handlers)
+  // Всегда актуальные props через ref (избегаем устаревших замыканий в обработчиках)
   const pRef = useRef(props);
   useEffect(() => {
     pRef.current = props;
   });
 
-  // History
+  // История
   const history = useRef<string[]>([]);
   const hIdx = useRef(-1);
 
-  // Drawing state
+  // Состояние рисования
   const drawing = useRef(false);
   const startPt = useRef({ x: 0, y: 0 });
   const drawObj = useRef<any>(null);
 
-  // Pan state (tool-based)
+  // Состояние панорамы (через инструмент)
   const panning = useRef(false);
   const panStart = useRef({ x: 0, y: 0 });
 
-  // Middle-mouse pan state (works with any tool)
+  // Состояние панорамы средней кнопкой (работает с любым инструментом)
   const midPanning = useRef(false);
   const midPanStart = useRef({ x: 0, y: 0 });
 
-  // True while an object is being moved/scaled/rotated (used to defer remote
-  // merges and toolbar repositioning so we never yank an object mid-drag).
+  // true, пока объект двигают/масштабируют/вращают (нужно, чтобы откладывать
+  // слияние и перепозиционирование панели и не дёргать объект во время перетаскивания).
   const draggingRef = useRef(false);
 
-  // Id of the sticker group currently being text-edited. While editing, the
-  // group is decomposed into transient pieces; we "hold" this id so the sync
-  // layer doesn't push the half-baked state or mistake the absence for a delete.
+  // Id группы стикера, которую сейчас редактируют как текст. Во время правки
+  // группа разбирается на временные части; мы «придерживаем» этот id, чтобы слой
+  // синка не пушил полуготовое состояние и не принял его отсутствие за удаление.
   const editingStickerId = useRef<string | null>(null);
 
 
-  // Background handler ref (for cleanup on style change)
+  // Ref обработчика фона (для очистки при смене стиля)
   const bgHandlerRef = useRef<(() => void) | null>(null);
 
-  // ─── History helpers ───────────────────────────────────────────
+  // ─── Помощники истории ───────────────────────────────────────────
   const pushHistory = useCallback(() => {
     const c = fc.current;
     if (!c) return;
@@ -183,7 +183,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
     pRef.current.onChange?.();
   }, []);
 
-  // ─── Apply tool to canvas ──────────────────────────────────────
+  // ─── Применение инструмента к холсту ───────────────────────────
   const applyTool = useCallback((canvas: any, tool: Tool) => {
     if (!canvas) return;
     canvas.isDrawingMode = tool === 'pencil';
@@ -202,19 +202,19 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
     canvas.hoverCursor = tool === 'select' ? 'move' : (CURSORS[tool] ?? 'default');
   }, []);
 
-  // ─── Background (grid / dots / plain) via CSS on container ────
-  // CSS approach is reliable regardless of DPR / canvas resize timing.
-  // The Fabric canvas is made transparent; the container div carries the bg.
+  // ─── Фон (сетка / точки / без фона) через CSS на контейнере ────
+  // CSS-подход надёжен независимо от DPR / тайминга ресайза холста.
+  // Холст Fabric делается прозрачным; фон несёт div-контейнер.
   const applyBackground = useCallback((canvas: any, bgStyle: string) => {
     const container = containerRef.current;
     if (!canvas || !container) return;
 
-    // Detach previous after:render sync handler
+    // Отцепляем предыдущий обработчик синка after:render
     if (bgHandlerRef.current) {
       canvas.off('after:render', bgHandlerRef.current);
       bgHandlerRef.current = null;
     }
-    // No internal Fabric background – canvas pixels are transparent
+    // Без внутреннего фона Fabric — пиксели холста прозрачны
     canvas.backgroundColor = '';
 
     if (bgStyle === 'none') {
@@ -224,7 +224,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       return;
     }
 
-    // Viewport snapshot (sentinel -999 ensures first sync always runs)
+    // Снимок вьюпорта (sentinel -999 гарантирует, что первый синк всегда выполнится)
     let lastZoom = -999;
     let lastOx   = -999;
     let lastOy   = -999;
@@ -233,19 +233,19 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       if (!canvas.viewportTransform) return;
       const [zoom, , , , ox, oy] = canvas.viewportTransform as number[];
 
-      // Round to 1 decimal for pan, 4 sig-figs for zoom —
-      // changes smaller than this are invisible and must NOT update CSS.
+      // Округляем пан до 1 знака, зум до 4 значащих —
+      // изменения мельче этого незаметны и НЕ должны обновлять CSS.
       const rz = Math.round(zoom * 1000) / 1000;
       const rx = Math.round(ox * 10) / 10;
       const ry = Math.round(oy * 10) / 10;
 
-      // Skip entirely when viewport hasn't meaningfully changed.
-      // This covers: object move, selection, text editing, etc.
+      // Полностью пропускаем, если вьюпорт существенно не изменился.
+      // Это покрывает: перемещение объекта, выделение, набор текста и т.п.
       if (rz === lastZoom && rx === lastOx && ry === lastOy) return;
       lastZoom = rz; lastOx = rx; lastOy = ry;
 
       if (bgStyle === 'grid') {
-        // Clamp so grid never gets denser than 24px (prevents visual noise on zoom-out)
+        // Ограничиваем, чтобы сетка не плотнее 24px (убирает визуальный шум при отдалении)
         const base = 40 * zoom;
         const size = base < 24 ? Math.ceil(24 / base) * base : base;
         const bx = ((ox % size) + size) % size;
@@ -256,7 +256,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         container.style.backgroundSize = `${size}px ${size}px`;
         container.style.backgroundPosition = `${bx}px ${by}px`;
       } else {
-        // Clamp so dots never get denser than 24px (prevents visual noise on zoom-out)
+        // Ограничиваем, чтобы точки не плотнее 24px (убирает визуальный шум при отдалении)
         const base = 28 * zoom;
         const size = base < 24 ? Math.ceil(24 / base) * base : base;
         const bx = ((ox % size) + size) % size;
@@ -270,7 +270,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
 
     bgHandlerRef.current = sync;
     canvas.on('after:render', sync);
-    sync();               // paint immediately without waiting for next render
+    sync();               // рисуем сразу, не дожидаясь следующего рендера
     canvas.requestRenderAll();
   }, []);
 
@@ -278,7 +278,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
     if (fc.current) applyBackground(fc.current, props.bgStyle);
   }, [props.bgStyle, applyBackground]);
 
-  // ─── Sync pencil brush when props change ──────────────────────
+  // ─── Синхронизируем кисть карандаша при смене props ──────────────────────
   useEffect(() => {
     const c = fc.current;
     if (!c || props.tool !== 'pencil') return;
@@ -288,7 +288,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
     }
   }, [props.strokeColor, props.strokeWidth, props.tool]);
 
-  // ─── Sync tool mode ───────────────────────────────────────────
+  // ─── Синхронизируем режим инструмента ───────────────────────────────────────────
   useEffect(() => {
     if (fc.current && fm.current) {
       const c = fc.current;
@@ -302,7 +302,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
     }
   }, [props.tool, applyTool, props.strokeColor, props.strokeWidth]);
 
-  // ─── Read-only mode ───────────────────────────────────────────
+  // ─── Режим «только чтение» ───────────────────────────────────────────
   useEffect(() => {
     const c = fc.current;
     if (!c) return;
@@ -321,14 +321,14 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
     c.requestRenderAll();
   }, [props.readOnly, applyTool]);
 
-  // ─── Initialize Fabric.js canvas (runs once) ─────────────────
+  // ─── Инициализация холста Fabric.js (один раз) ─────────────────
   useEffect(() => {
     if (!canvasElRef.current || !containerRef.current) return;
     let canvas: any;
     let resizeObs: ResizeObserver;
-    let aborted = false; // guards against HMR / StrictMode double-invoke
+    let aborted = false; // защита от двойного вызова при HMR / StrictMode
 
-    // Middle-mouse listener refs (stored here so cleanup can remove them)
+    // Ref-ы слушателей средней кнопки (хранятся тут, чтобы очистка могла их снять)
     let onMidDown: ((e: MouseEvent) => void) | null = null;
     let onMidMove: ((e: MouseEvent) => void) | null = null;
     let onMidUp: ((e: MouseEvent) => void) | null = null;
@@ -336,12 +336,12 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
 
 
     import('fabric').then(async (fab) => {
-      if (aborted) return; // cleanup already ran before promise resolved
+      if (aborted) return; // очистка уже отработала до резолва промиса
 
       fm.current = fab;
       const container = containerRef.current!;
 
-      // Dispose any leftover Fabric instance on this element (HMR safety)
+      // Уничтожаем остатки инстанса Fabric на этом элементе (безопасность HMR)
       if (fc.current) {
         try { fc.current.dispose(); } catch (_) {}
         fc.current = null;
@@ -363,7 +363,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       applyTool(canvas, pRef.current.tool);
       applyBackground(canvas, pRef.current.bgStyle);
 
-      // Load initial state
+      // Загружаем начальное состояние
       const initState = pRef.current.initialState;
       if (initState) {
         try {
@@ -379,23 +379,22 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       hIdx.current = 0;
       pRef.current.onReady?.();
 
-      // ── Sticker helpers ─────────────────────────────────────
-      // A sticker is a Group(Rect + Textbox). To edit the inner
-      // textbox we ungroup via fabric's removeAll() (which bakes
-      // the group's transform into the children's world coords),
-      // then re-group on editing exit. Resize is handled by
-      // `normalizeSticker`, which absorbs the group's scale into
-      // the children's unscaled dimensions — otherwise the text
-      // gets stretched and wraps at the original width.
+      // ── Помощники стикера ─────────────────────────────────────
+      // Стикер — это Group(Rect + Textbox). Чтобы редактировать внутренний
+      // textbox, разгруппируем через removeAll() Fabric (он запекает трансформ
+      // группы в мировые координаты детей), а на выходе из правки группируем
+      // обратно. Ресайз обрабатывает `normalizeSticker`, который вбирает масштаб
+      // группы в немасштабированные размеры детей — иначе текст растягивается и
+      // переносится по исходной ширине.
 
-      // Shrink fontSize so text fits inside the rect in both
-      // dimensions. Width/height are unscaled; scale cancels
-      // because rect and textbox share the group's transform.
+      // Уменьшаем fontSize, чтобы текст влезал в прямоугольник по обоим
+      // измерениям. Ширина/высота немасштабированы; масштаб сокращается,
+      // т.к. rect и textbox делят трансформ группы.
       const fitStickerText = (rect: any, textbox: any) => {
         const targetH = (rect.height || STICKER_SIZE) - STICKER_PAD * 2;
         const targetW = (rect.width || STICKER_SIZE) - STICKER_PAD * 2;
-        // Defensive: fabric silently expands `width` to fit a
-        // single wide "word" via dynamicMinWidth.
+        // Защитно: fabric молча расширяет `width`, чтобы вместить одно
+        // широкое «слово» через dynamicMinWidth.
         textbox.set('width', targetW);
         let fs = STICKER_FONT_SIZE;
         textbox.set('fontSize', fs);
@@ -418,9 +417,9 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         textbox.setCoords();
       };
 
-      // After user resize, bake group's scaleX/scaleY into the
-      // rect's width/height and reset scale to 1, so the text
-      // stops being stretched and re-wraps at the new width.
+      // После ресайза пользователем запекаем scaleX/scaleY группы в
+      // width/height прямоугольника и сбрасываем масштаб в 1, чтобы текст
+      // перестал растягиваться и переносился по новой ширине.
       const normalizeSticker = (sticker: any) => {
         if (!sticker || !sticker.data?.isSticker) return false;
         if ((sticker.scaleX ?? 1) === 1 && (sticker.scaleY ?? 1) === 1) return false;
@@ -488,8 +487,8 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         rect.setCoords();
         textbox.setCoords();
 
-        // While editing, these are transient pieces — keep them out of sync and
-        // hold the group's id so peers don't see the sticker vanish/flicker.
+        // Во время правки это временные части — держим их вне синка и
+        // придерживаем id группы, чтобы соседи не видели исчезновение/мерцание стикера.
         rect.excludeFromSync = true;
         textbox.excludeFromSync = true;
         editingStickerId.current = stickerId ?? null;
@@ -512,7 +511,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
           canvas.remove(rect);
           canvas.remove(textbox);
 
-          // Editing done: clear the transient markers and re-group.
+          // Правка завершена: снимаем временные маркеры и группируем обратно.
           delete rect.excludeFromSync;
           delete textbox.excludeFromSync;
           editingStickerId.current = null;
@@ -535,15 +534,15 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         canvas.requestRenderAll();
       };
 
-      // Normalize sticker after resize — must run BEFORE the
-      // generic pushHistory handler so the snapshot records the
-      // post-normalization state, not the stretched intermediate.
+      // Нормализуем стикер после ресайза — должно выполниться ДО общего
+      // обработчика pushHistory, чтобы снимок записал состояние после
+      // нормализации, а не растянутое промежуточное.
       canvas.on('object:modified', (opt: any) => {
         const t = opt.target;
         if (t?.data?.isSticker) normalizeSticker(t);
       });
 
-      // Double-click on a sticker → enter text edit mode
+      // Двойной клик по стикеру → вход в режим правки текста
       canvas.on('mouse:dblclick', (opt: any) => {
         const target = opt.target;
         if (target && target.data?.isSticker && !drawing.current) {
@@ -551,7 +550,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         }
       });
 
-      // ── Zoom on wheel ───────────────────────────────────────
+      // ── Зум колесом ───────────────────────────────────────
       canvas.on('mouse:wheel', (opt: any) => {
         const delta = opt.e.deltaY;
         let zoom = canvas.getZoom();
@@ -563,7 +562,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         pRef.current.onZoomChange(Math.round(zoom * 100));
       });
 
-      // ── Mouse down ─────────────────────────────────────────
+      // ── Нажатие мыши ───────────────────────────────────────
       canvas.on('mouse:down', (opt: any) => {
         const tool = pRef.current.tool;
         const pointer = canvas.getPointer(opt.e);
@@ -599,7 +598,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
             pRef.current.fillColor && pRef.current.fillColor.startsWith('#')
               ? pRef.current.fillColor
               : STICKER_COLOR;
-          // Top-left origin in world coords; sticker is centered on click point.
+          // Origin в левом верхнем углу в мировых координатах; стикер центрируется по точке клика.
           const sx = pointer.x - STICKER_SIZE / 2;
           const sy = pointer.y - STICKER_SIZE / 2;
           const rect = new fab.Rect({
@@ -626,9 +625,9 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
             fontFamily: 'Arial, sans-serif',
             fill: STICKER_TEXT_COLOR,
             textAlign: 'center',
-            // Wrap by grapheme so long unbroken strings stay
-            // inside the sticker; otherwise fabric would expand
-            // the textbox width to fit a single long "word".
+            // Перенос по графемам, чтобы длинные неразрывные строки
+            // оставались внутри стикера; иначе fabric расширил бы ширину
+            // textbox под одно длинное «слово».
             splitByGrapheme: true,
             dynamicMinWidth: 0,
             lockScalingFlip: true,
@@ -647,7 +646,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
           return;
         }
 
-        // ── Shape drawing ───────────────────────────────────
+        // ── Рисование фигур ─────────────────────────────────
         drawing.current = true;
         startPt.current = { x: pointer.x, y: pointer.y };
 
@@ -657,7 +656,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         const base = {
           stroke,
           strokeWidth: sw,
-          strokeUniform: true,   // keep stroke width constant when scaling
+          strokeUniform: true,   // держим толщину обводки постоянной при масштабировании
           fill: fill === 'transparent' ? 'transparent' : fill,
           selectable: false,
           evented: false,
@@ -700,7 +699,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         if (obj) { canvas.add(obj); drawObj.current = obj; }
       });
 
-      // ── Mouse move ──────────────────────────────────────────
+      // ── Движение мыши ──────────────────────────────────────
       canvas.on('mouse:move', (opt: any) => {
         const tool = pRef.current.tool;
 
@@ -748,7 +747,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         canvas.requestRenderAll();
       });
 
-      // ── Mouse up ────────────────────────────────────────────
+      // ── Отпускание мыши ────────────────────────────────────
       canvas.on('mouse:up', () => {
         const tool = pRef.current.tool;
 
@@ -773,7 +772,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
           canvas.remove(obj);
           const x1 = obj.x1, y1 = obj.y1, x2 = obj.x2, y2 = obj.y2;
           const lineLen = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
-          if (lineLen < 5) return; // too short
+          if (lineLen < 5) return; // слишком короткая
           const angle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI) + 90;
           const hs = Math.max(14, pRef.current.strokeWidth * 5);
           const arrowLine = new fab.Line([x1, y1, x2, y2], {
@@ -802,7 +801,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         pushHistory();
       });
 
-      // ── Selection helpers ───────────────────────────────────
+      // ── Помощники выделения ───────────────────────────────────
       const getSelectionInfo = (): SelectionInfo | undefined => {
         const obj = canvas.getActiveObject();
         if (!obj) return undefined;
@@ -830,12 +829,12 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         };
       };
 
-      // ── Selection events ────────────────────────────────────
+      // ── События выделения ────────────────────────────────────
       canvas.on('selection:created', () => pRef.current.onSelectionChange(true, getSelectionInfo()));
       canvas.on('selection:updated', () => pRef.current.onSelectionChange(true, getSelectionInfo()));
       canvas.on('selection:cleared', () => pRef.current.onSelectionChange(false));
 
-      // Hide floating toolbar while dragging/resizing to avoid jitter
+      // Прячем плавающую панель при перетаскивании/ресайзе, чтобы не дёргалась
       canvas.on('object:moving', () => {
         if (!draggingRef.current) {
           draggingRef.current = true;
@@ -859,7 +858,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         pRef.current.onSelectionChange(true, getSelectionInfo());
       });
 
-      // Update toolbar position on pan/zoom (not during drag), throttled via RAF
+      // Обновляем позицию панели при пане/зуме (не во время перетаскивания), троттлинг через RAF
       let rafPending = false;
       canvas.on('after:render', () => {
         if (rafPending || draggingRef.current) return;
@@ -874,7 +873,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       });
 
 
-      // ── Object modified ─────────────────────────────────────
+      // ── Объект изменён ──────────────────────────────────────
       canvas.on('object:modified', pushHistory);
       canvas.on('path:created', () => {
         canvas.forEachObject((o: any) => {
@@ -886,7 +885,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         pushHistory();
       });
 
-      // ── Resize ──────────────────────────────────────────────
+      // ── Ресайз ──────────────────────────────────────────────
       resizeObs = new ResizeObserver(() => {
         const c = containerRef.current;
         if (!c || !canvas) return;
@@ -896,10 +895,10 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       });
       resizeObs.observe(container);
 
-      // ── Middle-mouse pan (works with any tool, like Miro) ───
+      // ── Панорама средней кнопкой (работает с любым инструментом, как в Miro) ───
       onMidDown = (e: MouseEvent) => {
         if (e.button !== 1) return;
-        e.preventDefault(); // prevent browser autoscroll icon
+        e.preventDefault(); // предотвращаем иконку автоскролла браузера
         midPanning.current = true;
         midPanStart.current = { x: e.clientX, y: e.clientY };
         container.style.cursor = 'grabbing';
@@ -926,7 +925,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
     });
 
     return () => {
-      aborted = true;       // stop the async chain if still pending
+      aborted = true;       // останавливаем асинхронную цепочку, если ещё в процессе
       resizeObs?.disconnect();
       if (bgHandlerRef.current && canvas) {
         canvas.off('after:render', bgHandlerRef.current);
@@ -944,7 +943,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─── Imperative API ────────────────────────────────────────────
+  // ─── Императивный API ──────────────────────────────────────────
   useImperativeHandle(ref, () => ({
     undo() {
       const c = fc.current;
@@ -998,7 +997,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         pRef.current.onZoomChange(100);
         return;
       }
-      // Reset transform first so getBoundingRect returns world coords
+      // Сначала сбрасываем трансформ, чтобы getBoundingRect возвращал мировые координаты
       c.setViewportTransform([1, 0, 0, 1, 0, 0]);
       const padding = 60;
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -1096,8 +1095,8 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       const c = fc.current;
       if (!c) return;
       c.getActiveObjects().forEach((obj: any) => {
-        // Sticker: recolor the inner rect (the group itself has
-        // no visible fill).
+        // Стикер: перекрашиваем внутренний rect (у самой группы нет
+        // видимой заливки).
         if (obj?.data?.isSticker) {
           if (fill !== undefined && fill !== 'transparent') {
             const innerRect = obj.getObjects?.().find((o: any) => o.type === 'rect');
@@ -1120,7 +1119,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         if (strokeWidth !== undefined) {
           const oldSW = typeof obj.strokeWidth === 'number' ? obj.strokeWidth : 0;
           const halfDelta = (strokeWidth - oldSW) / 2;
-          // Shift position so stroke grows equally on all 4 sides, not just right/bottom
+          // Сдвигаем позицию, чтобы обводка росла одинаково со всех 4 сторон, а не только справа/снизу
           obj.set({
             strokeWidth,
             left: (obj.left ?? 0) - halfDelta,
@@ -1140,31 +1139,31 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       const c = fc.current;
       if (!c) return false;
       const ao = c.getActiveObject();
-      // Editing text or holding a multi-selection ⇒ coordinates are in flux;
-      // defer both pushing and applying remote changes until idle.
+      // Набор текста или мультивыделение ⇒ координаты «плавают»;
+      // откладываем и пуш, и применение чужих изменений до простоя.
       if (ao && (ao.isEditing || ao.type === 'activeselection')) return true;
       return false;
     },
     getSyncState() {
       const c = fc.current;
       if (!c) return null;
-      // Coordinates are globally unstable mid-gesture / multi-selection — retry later.
+      // Координаты глобально нестабильны во время жеста / мультивыделения — повторим позже.
       if (drawing.current || panning.current || midPanning.current || draggingRef.current) return null;
       const ao = c.getActiveObject();
       if (ao && ao.type === 'activeselection') return null;
 
-      // Assign ids to any object that still lacks one (new shapes, legacy data),
-      // but never to transient pieces of a sticker that's mid-text-edit.
+      // Присваиваем id любому объекту без него (новые фигуры, старые данные),
+      // но никогда — временным частям стикера, который сейчас в правке текста.
       c.getObjects().forEach((o: any) => {
         if (o.excludeFromSync) return;
         if (!o.data || typeof o.data !== 'object') o.data = {};
         if (!o.data.id) o.data.id = genId();
       });
 
-      // The object the user is editing right now is excluded from the push (its
-      // content is in flux) and reported as "held" so the caller keeps it rather
-      // than treating its absence as a deletion. For a sticker the live group is
-      // decomposed into transient pieces, so we hold the original group id.
+      // Объект, который пользователь сейчас редактирует, исключается из пуша (его
+      // содержимое «плавает») и сообщается как «held», чтобы вызывающий сохранил его,
+      // а не счёл отсутствие удалением. Для стикера живая группа разобрана на
+      // временные части, поэтому придерживаем id исходной группы.
       const held: string[] = [];
       let editingId: string | null = null;
       if (ao && ao.isEditing) {
@@ -1175,9 +1174,9 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       const full = c.toObject(['data']);
       const objects: Record<string, any> = {};
       for (const o of full.objects ?? []) {
-        if (o.excludeFromSync) continue;       // transient sticker-edit pieces
+        if (o.excludeFromSync) continue;       // временные части стикера в правке
         const id = o?.data?.id;
-        if (!id || id === editingId) continue; // skip the in-progress object
+        if (!id || id === editingId) continue; // пропускаем объект в процессе
         objects[id] = o;
       }
       const meta: any = { ...full };
@@ -1208,8 +1207,8 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         const existing = byId.get(ch.objectId);
 
         if (ch.deleted) {
-          if (!existing) { applied.push(ch.objectId); continue; }   // already gone
-          if (isLocked(existing)) continue;                          // defer
+          if (!existing) { applied.push(ch.objectId); continue; }   // уже удалён
+          if (isLocked(existing)) continue;                          // откладываем
           c.remove(existing);
           changed = true;
           applied.push(ch.objectId);
@@ -1221,11 +1220,11 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         if (existing) {
           try {
             if (JSON.stringify(existing.toObject(['data'])) === JSON.stringify(ch.data)) {
-              applied.push(ch.objectId);   // already up to date
+              applied.push(ch.objectId);   // уже актуально
               continue;
             }
-          } catch { /* fall through to replace */ }
-          if (isLocked(existing)) continue; // defer overwriting what they're editing
+          } catch { /* проваливаемся к замене */ }
+          if (isLocked(existing)) continue; // откладываем перезапись того, что редактируют
         }
 
         let enlivened: any[] = [];
@@ -1250,8 +1249,8 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       if (changed) {
         applyTool(c, pRef.current.tool);
         c.requestRenderAll();
-        // Reset the undo baseline so a later undo can't delete objects a peer
-        // just merged in (collaborative undo is out of scope).
+        // Сбрасываем базу undo, чтобы последующий undo не удалил объекты,
+        // которые только что влил сосед (совместный undo вне рамок).
         history.current = [JSON.stringify(c.toObject(['data']))];
         hIdx.current = 0;
         pRef.current.onHistoryChange(false, false);

@@ -13,13 +13,13 @@ export async function POST(request: NextRequest) {
 
     const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
 
-    // Always return success to prevent email enumeration
+    // Всегда возвращаем успех, чтобы не дать перечислить email
     if (!user) {
       return NextResponse.json({ success: true });
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+    const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 час
 
     db.prepare(
       'UPDATE users SET resetToken = ?, resetTokenExpiry = ? WHERE id = ?'

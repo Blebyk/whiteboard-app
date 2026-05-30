@@ -161,7 +161,7 @@ export default function TopBar({
         boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
       }}
     >
-      {/* ── Left: Back + Board name ── */}
+      {/* ── Слева: назад + имя доски ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '0 0 auto' }}>
         <Link
           href="/dashboard"
@@ -255,7 +255,7 @@ export default function TopBar({
         )}
       </div>
 
-      {/* ── Center: Undo / Redo + Delete (editors only) ── */}
+      {/* ── Центр: отмена / повтор + удалить (только редакторы) ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, justifyContent: 'center' }}>
         {canEdit && <>
           <Btn onClick={onUndo} disabled={!canUndo} title="Отменить (Ctrl+Z)">
@@ -275,9 +275,9 @@ export default function TopBar({
         </>}
       </div>
 
-      {/* ── Right: Zoom + Actions ── */}
+      {/* ── Справа: зум + действия ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '0 0 auto' }}>
-        {/* Zoom controls */}
+        {/* Управление зумом */}
         <div style={{
           display: 'flex', alignItems: 'center',
           border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden',
@@ -305,10 +305,10 @@ export default function TopBar({
           >+</button>
         </div>
 
-        {/* Share — only the board owner can manage access */}
+        {/* Поделиться — доступом управляет только владелец */}
         {isOwner && <ShareButton boardId={boardId} />}
 
-        {/* Save — editors only */}
+        {/* Сохранить — только редакторы */}
         {canEdit && (
           <Btn onClick={onSave} title="Сохранить (Ctrl+S)">
             <IC d={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></>} />
@@ -316,7 +316,7 @@ export default function TopBar({
           </Btn>
         )}
 
-        {/* Menu */}
+        {/* Меню */}
         <div style={{ position: 'relative' }} ref={menuRef}>
           <Btn onClick={() => setMenuOpen((v) => !v)} title="Ещё">
             <IC d={<><circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" /></>} />

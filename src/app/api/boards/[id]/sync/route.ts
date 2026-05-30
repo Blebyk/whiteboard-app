@@ -4,7 +4,7 @@ import { getSessionUser } from '@/lib/auth';
 import { ensureBoardObjects, applyObjectChanges, type ObjectChange } from '@/lib/boardSync';
 import { publish } from '@/lib/boardEvents';
 
-/** Board row if the user owns it or it's shared with them, else undefined. */
+/** Строка доски, если пользователь владелец или ему её расшарили, иначе undefined. */
 function getAccess(userId: number, boardId: number) {
   return db
     .prepare(`
@@ -20,7 +20,7 @@ function getAccess(userId: number, boardId: number) {
 }
 
 // GET /api/boards/[id]/sync?since=<rev>
-// Returns the current revision and every object change with rev > since.
+// Возвращает текущую ревизию и все изменения объектов с rev > since.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 });
@@ -53,7 +53,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json({ rev: current?.rev ?? 0, changes });
 }
 
-// POST /api/boards/[id]/sync — push a batch of object changes (editors only).
+// POST /api/boards/[id]/sync — пуш пачки изменений объектов (только редакторы).
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 });
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   ensureBoardObjects(boardId);
   const rev = applyObjectChanges(boardId, user.id, changes, meta, thumbnail);
-  // Wake up other clients' SSE connections immediately (low-latency sync).
+  // Мгновенно будим SSE-соединения других клиентов (низкая задержка синка).
   publish(boardId, { rev, by: user.id });
   return NextResponse.json({ rev });
 }

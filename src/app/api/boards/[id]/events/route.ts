@@ -6,9 +6,9 @@ import { subscribe } from '@/lib/boardEvents';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// GET /api/boards/[id]/events — Server-Sent Events stream.
-// Emits `{ rev, by }` whenever the board changes, so clients can pull the diff
-// immediately instead of waiting for the next poll.
+// GET /api/boards/[id]/events — поток Server-Sent Events.
+// Шлёт `{ rev, by }` при каждом изменении доски, чтобы клиент сразу подтянул
+// дифф, а не ждал следующего опроса.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser();
   if (!user) return new Response('Не авторизован', { status: 401 });
@@ -31,25 +31,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const stream = new ReadableStream({
     start(controller) {
       const send = (obj: unknown) => {
-        try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`)); } catch { /* closed */ }
+        try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`)); } catch { /* закрыт */ }
       };
 
-      // Initial event with the current rev so a freshly-(re)connected client
-      // catches up on anything it missed while offline.
+      // Стартовое событие с текущим rev, чтобы только что (пере)подключившийся
+      // клиент догнал то, что пропустил, пока был офлайн.
       const cur = db.prepare('SELECT rev FROM boards WHERE id = ?').get(boardId) as { rev: number } | undefined;
       send({ rev: cur?.rev ?? 0, by: null });
 
       unsubscribe = subscribe(boardId, send);
 
-      // Comment heartbeat keeps proxies/browsers from closing an idle stream.
+      // Heartbeat-комментарий не даёт прокси/браузеру закрыть простаивающий поток.
       heartbeat = setInterval(() => {
-        try { controller.enqueue(encoder.encode(': ping\n\n')); } catch { /* closed */ }
+        try { controller.enqueue(encoder.encode(': ping\n\n')); } catch { /* закрыт */ }
       }, 25_000);
 
       const onAbort = () => {
         if (heartbeat) clearInterval(heartbeat);
         unsubscribe();
-        try { controller.close(); } catch { /* already closed */ }
+        try { controller.close(); } catch { /* уже закрыт */ }
       };
       req.signal.addEventListener('abort', onAbort);
     },

@@ -41,7 +41,7 @@ export default function LoginPage() {
     <div style={{
       minHeight: '100vh',
       backgroundColor: '#f0f2f5',
-      // Dotted whiteboard background — same pattern as the editor canvas
+      // Точечный фон доски — тот же паттерн, что на холсте редактора
       backgroundImage: 'radial-gradient(circle, #9aa5b4 1.2px, transparent 1.2px)',
       backgroundSize: '24px 24px',
       backgroundPosition: '0 0',

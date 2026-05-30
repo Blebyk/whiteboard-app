@@ -10,8 +10,8 @@ interface Board {
   thumbnail: string | null;
   created_at: string;
   updated_at: string;
-  shared?: number;          // 0 = owned, 1 = shared with me
-  ownerName?: string | null; // name of the owner if shared
+  shared?: number;          // 0 = своя, 1 = расшарена мне
+  ownerName?: string | null; // имя владельца, если расшарена
 }
 
 interface User {
@@ -47,7 +47,7 @@ export default function DashboardClient({ user }: { user: User }) {
   async function fetchBoards() {
     try {
       const res = await fetch('/api/boards');
-      // Guard against empty response body (e.g., when the server crashed)
+      // Защита от пустого тела ответа (например, если сервер упал)
       const text = await res.text();
       const data = text ? JSON.parse(text) : {};
       setBoards(data.boards || []);
@@ -109,7 +109,7 @@ export default function DashboardClient({ user }: { user: User }) {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f5f6fa', fontFamily: 'Arial, sans-serif' }}>
-      {/* Header */}
+      {/* Шапка */}
       <header style={{
         backgroundColor: 'white',
         borderBottom: '1px solid #e5e7eb',
@@ -147,7 +147,7 @@ export default function DashboardClient({ user }: { user: User }) {
         </div>
       </header>
 
-      {/* Main */}
+      {/* Основное */}
       <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 32px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
           <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 800, color: '#1a1a2e' }}>
@@ -219,7 +219,7 @@ export default function DashboardClient({ user }: { user: User }) {
             gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
             gap: '20px',
           }}>
-            {/* New board card */}
+            {/* Карточка новой доски */}
             <div
               onClick={createBoard}
               style={{
@@ -262,7 +262,7 @@ export default function DashboardClient({ user }: { user: User }) {
                 onMouseEnter={(e) => (e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.1)')}
                 onMouseLeave={(e) => (e.currentTarget.style.boxShadow = 'none')}
               >
-                {/* Thumbnail */}
+                {/* Миниатюра */}
                 <Link href={`/board/${board.id}`} style={{ textDecoration: 'none', display: 'block' }}>
                   <div style={{
                     height: '140px',
@@ -287,7 +287,7 @@ export default function DashboardClient({ user }: { user: User }) {
                         <path d="M3 9h18" />
                       </svg>
                     )}
-                    {/* «Поделено» badge on shared boards */}
+                    {/* Бейдж «Поделено» на расшаренных досках */}
                     {board.shared === 1 && (
                       <div style={{
                         position: 'absolute',
@@ -318,7 +318,7 @@ export default function DashboardClient({ user }: { user: User }) {
                   </div>
                 </Link>
 
-                {/* Info */}
+                {/* Инфо */}
                 <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     {renamingId === board.id ? (
@@ -360,7 +360,7 @@ export default function DashboardClient({ user }: { user: User }) {
                     </p>
                   </div>
 
-                  {/* Context menu button */}
+                  {/* Кнопка контекстного меню */}
                   <div style={{ position: 'relative' }} ref={menuId === board.id ? menuRef : undefined}>
                     <button
                       onClick={(e) => {
@@ -402,7 +402,7 @@ export default function DashboardClient({ user }: { user: User }) {
                         >
                           Открыть
                         </button>
-                        {/* Rename is owner-only */}
+                        {/* Переименование — только владелец */}
                         {board.shared !== 1 && (
                           <button
                             onClick={() => {
@@ -415,7 +415,7 @@ export default function DashboardClient({ user }: { user: User }) {
                             Переименовать
                           </button>
                         )}
-                        {/* Owner deletes the board for everyone; shared user only removes it from their list */}
+                        {/* Владелец удаляет доску для всех; шареный — только из своего списка */}
                         <button
                           onClick={() => deleteBoard(board.id, board.shared === 1)}
                           style={{ ...menuItemStyle, color: '#dc2626' }}

@@ -1,21 +1,21 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 
-// DB file location is configurable so it can live on a mounted volume in
-// production (e.g. Railway Volume → DB_PATH=/data/whiteboard.db). Falls back to
-// the project directory for local dev.
+// Путь к файлу БД настраивается, чтобы в продакшене он мог лежать на
+// примонтированном диске (например, Railway Volume → DB_PATH=/data/whiteboard.db).
+// По умолчанию — каталог проекта (для локальной разработки).
 const dbPath = process.env.DB_PATH || path.join(process.cwd(), 'whiteboard.db');
 
-// Open the connection and run idempotent migrations. Called lazily at runtime —
-// never during `next build` (see below).
+// Открывает соединение и прогоняет идемпотентные миграции. Вызывается лениво в
+// рантайме — никогда во время `next build` (см. ниже).
 function init(): Database.Database {
   const db = new Database(dbPath);
 
-  // WAL = better concurrent reads; busy_timeout avoids transient SQLITE_BUSY.
+  // WAL = лучше конкурентные чтения; busy_timeout гасит кратковременный SQLITE_BUSY.
   db.pragma('journal_mode = WAL');
   db.pragma('busy_timeout = 10000');
 
-  // Create all tables if they don't exist yet (safe to run on every boot)
+  // Создаём все таблицы, если их ещё нет (безопасно запускать при каждом старте)
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,7 +62,7 @@ function init(): Database.Database {
     );
   `);
 
-  // ── Migrations for existing DBs (idempotent) ──────────────────
+  // ── Миграции для существующих БД (идемпотентные) ──────────────
   const boardCols = (db.pragma('table_info(boards)') as { name: string }[]).map((c) => c.name);
   if (!boardCols.includes('bgStyle')) {
     db.exec("ALTER TABLE boards ADD COLUMN bgStyle TEXT NOT NULL DEFAULT 'dots'");
@@ -70,7 +70,7 @@ function init(): Database.Database {
   if (!boardCols.includes('updated_by')) {
     db.exec('ALTER TABLE boards ADD COLUMN updated_by INTEGER');
   }
-  // `rev` = per-board monotonic revision counter used as the sync cursor.
+  // `rev` = монотонный счётчик ревизий доски, используется как курсор синхронизации.
   if (!boardCols.includes('rev')) {
     db.exec('ALTER TABLE boards ADD COLUMN rev INTEGER NOT NULL DEFAULT 0');
   }
@@ -84,9 +84,10 @@ function init(): Database.Database {
     db.exec("ALTER TABLE board_shares ADD COLUMN role TEXT NOT NULL DEFAULT 'editor'");
   }
 
-  // One row per canvas object. `data` is the fabric JSON (NULL when deleted —
-  // kept as a tombstone so peers learn about removals). Every change stamps the
-  // board's new `rev`, letting clients pull only what changed since they last saw.
+  // Одна строка на объект холста. `data` — JSON объекта Fabric (NULL при удалении —
+  // хранится как «надгробие», чтобы соседи узнали об удалении). Каждое изменение
+  // штампует новый `rev` доски, позволяя клиентам подтягивать только то, что
+  // изменилось с момента их последней синхронизации.
   db.exec(`
     CREATE TABLE IF NOT EXISTS board_objects (
       boardId    INTEGER NOT NULL,
@@ -104,17 +105,17 @@ function init(): Database.Database {
   return db;
 }
 
-// Reuse one connection across HMR cycles / module reloads.
+// Переиспользуем одно соединение между HMR-циклами / перезагрузками модуля.
 const globalForDb = global as unknown as { _db?: Database.Database };
 function getDb(): Database.Database {
   if (!globalForDb._db) globalForDb._db = init();
   return globalForDb._db;
 }
 
-// `next build` evaluates route/page modules (sometimes in parallel workers).
-// Opening + migrating SQLite there caused SQLITE_BUSY and the build FS may be
-// read-only — and the build never needs the DB. During the build phase we hand
-// out a no-op proxy; the real connection is opened only at runtime.
+// `next build` исполняет модули роутов/страниц (иногда в параллельных воркерах).
+// Открытие + миграции SQLite там вызывали SQLITE_BUSY, а файловая система сборки
+// может быть только для чтения — при этом БД сборке не нужна вовсе. На этапе
+// сборки отдаём no-op заглушку; реальное соединение открывается только в рантайме.
 const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
 
 const db: Database.Database = isBuildPhase

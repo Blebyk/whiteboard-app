@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
-// ─── Color math ────────────────────────────────────────────────
+// ─── Цветовая математика ────────────────────────────────────────────────
 function hsvToHex(h: number, s: number, v: number): string {
   const f = (n: number) => {
     const k = (n + h / 60) % 6;
@@ -49,7 +49,7 @@ const PRESETS = [
 const POPUP_W = 210;
 const POPUP_H = 320;
 
-// ─── Component ─────────────────────────────────────────────────
+// ─── Компонент ─────────────────────────────────────────────────
 interface ColorPickerProps {
   value: string;
   onChange(hex: string): void;
@@ -67,7 +67,7 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
   const popupRef = useRef<HTMLDivElement>(null);
   const dragging = useRef<'sv' | 'hue' | null>(null);
 
-  // Sync when external value changes
+  // Синхронизируем при изменении внешнего значения
   useEffect(() => {
     if (!isValidHex(value)) return;
     const cur = hsvToHex(...hsvRef.current);
@@ -78,7 +78,7 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
     }
   }, [value]);
 
-  // Compute position and open
+  // Вычисляем позицию и открываем
   const openPicker = () => {
     const btn = triggerRef.current;
     if (!btn) return;
@@ -90,7 +90,7 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
     setOpen(true);
   };
 
-  // Close on outside click
+  // Закрываем по клику вне
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -130,7 +130,7 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
     forceRender((n) => n + 1);
   }, [onChange]);
 
-  // Global drag listeners
+  // Глобальные слушатели перетаскивания
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (dragging.current === 'sv') applyFromSV(e);
@@ -165,7 +165,7 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
         padding: '14px',
       }}
     >
-      {/* SV gradient area */}
+      {/* Область SV-градиента */}
       <div
         ref={svAreaRef}
         onMouseDown={(e) => {
@@ -202,7 +202,7 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
         />
       </div>
 
-      {/* Hue slider */}
+      {/* Слайдер оттенка */}
       <div
         ref={hueBarRef}
         onMouseDown={(e) => {
@@ -238,7 +238,7 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
         />
       </div>
 
-      {/* Preview + hex input */}
+      {/* Превью + ввод hex */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
         <div
           style={{
@@ -280,7 +280,7 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
         />
       </div>
 
-      {/* Preset swatches */}
+      {/* Предустановленные образцы */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
         {PRESETS.map((c) => (
           <button

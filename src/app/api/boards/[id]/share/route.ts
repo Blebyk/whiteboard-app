@@ -21,7 +21,7 @@ function ensureOwner(boardId: number, userId: number) {
     .get(boardId, userId) as any;
 }
 
-// POST /api/boards/[id]/share  body: { email, role? }
+// POST /api/boards/[id]/share  тело: { email, role? }
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const me = await getSessionUser();
   if (!me) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 });
@@ -76,7 +76,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   return NextResponse.json({ users });
 }
 
-// PATCH /api/boards/[id]/share  body: { userId, role }
+// PATCH /api/boards/[id]/share  тело: { userId, role }
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const me = await getSessionUser();
   if (!me) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 });

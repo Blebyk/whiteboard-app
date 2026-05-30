@@ -34,7 +34,7 @@ export default function FloatingToolbar({ info, onApply, onDelete }: Props) {
   const [sw, setSw] = useState(info.strokeWidth);
   const [fs, setFs] = useState(info.fontSize);
 
-  // Sync when a different object is selected
+  // Синхронизируем при выборе другого объекта
   useEffect(() => {
     setStroke(info.strokeColor);
     setFill(info.fillColor);
@@ -49,13 +49,13 @@ export default function FloatingToolbar({ info, onApply, onDelete }: Props) {
   const showStroke = !isImage;
   const showFontSize = isText;
 
-  // Position: above selection, or below if too close to topbar
+  // Позиция: над выделением, или под ним, если слишком близко к верхней панели
   const above = info.bounds.y - TOPBAR_H > TOOLBAR_H + GAP * 2;
   const top = above
     ? info.bounds.y - TOOLBAR_H - GAP
     : info.bounds.y + info.bounds.h + GAP;
 
-  // Center on selection, clamp to canvas area
+  // Центрируем по выделению, ограничиваем областью холста
   const estimatedW = 80
     + (showFill ? 90 : 0)
     + (showStroke ? 60 : 0)
@@ -88,7 +88,7 @@ export default function FloatingToolbar({ info, onApply, onDelete }: Props) {
         pointerEvents: 'auto',
       }}
     >
-      {/* Fill color */}
+      {/* Заливка */}
       {showFill && (
         <>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
@@ -116,7 +116,7 @@ export default function FloatingToolbar({ info, onApply, onDelete }: Props) {
         </>
       )}
 
-      {/* Text color */}
+      {/* Цвет текста */}
       {showFontSize && (
         <>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
@@ -130,7 +130,7 @@ export default function FloatingToolbar({ info, onApply, onDelete }: Props) {
         </>
       )}
 
-      {/* Stroke color */}
+      {/* Цвет обводки */}
       {showStroke && (
         <>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
@@ -144,7 +144,7 @@ export default function FloatingToolbar({ info, onApply, onDelete }: Props) {
         </>
       )}
 
-      {/* Stroke width */}
+      {/* Толщина обводки */}
       {showStroke && (
         <>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
@@ -162,7 +162,7 @@ export default function FloatingToolbar({ info, onApply, onDelete }: Props) {
         </>
       )}
 
-      {/* Font size */}
+      {/* Размер шрифта */}
       {showFontSize && (
         <>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
@@ -180,7 +180,7 @@ export default function FloatingToolbar({ info, onApply, onDelete }: Props) {
         </>
       )}
 
-      {/* Delete */}
+      {/* Удалить */}
       <button
         onClick={onDelete}
         title="Удалить (Del)"

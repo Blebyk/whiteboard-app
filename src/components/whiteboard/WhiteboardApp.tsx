@@ -41,17 +41,17 @@ export default function WhiteboardApp({
   const [name, setName] = useState(boardName);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
 
-  // ─── Object-level sync state ──────────────────────────────────
-  const lastRev = useRef<number>(initialRev);              // highest server rev we've applied
-  const syncedSnapshot = useRef<Record<string, string>>({}); // id → JSON of last-synced object
-  const readyRef = useRef(false);                          // canvas finished initial load
-  const isSyncing = useRef(false);                         // a pull is in flight
-  const savingRef = useRef(false);                         // a push is in flight
-  const pendingSaveRef = useRef(false);                    // local edits await a push
+  // ─── Состояние синхронизации по объектам ──────────────────────────────────
+  const lastRev = useRef<number>(initialRev);              // макс. ревизия сервера, которую применили
+  const syncedSnapshot = useRef<Record<string, string>>({}); // id → JSON последнего синхронизированного объекта
+  const readyRef = useRef(false);                          // холст завершил начальную загрузку
+  const isSyncing = useRef(false);                         // идёт pull
+  const savingRef = useRef(false);                         // идёт push
+  const pendingSaveRef = useRef(false);                    // локальные правки ждут push
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pushRef = useRef<() => void>(() => {});            // always-latest pushChanges
+  const pushRef = useRef<() => void>(() => {});            // всегда актуальный pushChanges
 
-  // ─── Save bgStyle immediately on change (skip first mount) ────
+  // ─── Сохраняем bgStyle сразу при изменении (кроме первого монтажа) ────
   useEffect(() => {
     if (!isMounted.current) { isMounted.current = true; return; }
     if (!canEdit) return;
@@ -62,7 +62,7 @@ export default function WhiteboardApp({
     });
   }, [bgStyle, boardId, canEdit]);
 
-  // Build the baseline snapshot once the canvas has loaded the initial state.
+  // Строим базовый снимок, как только холст загрузил начальное состояние.
   const handleReady = useCallback(() => {
     const state = canvasRef.current?.getSyncState();
     if (state) {
@@ -73,13 +73,13 @@ export default function WhiteboardApp({
     readyRef.current = true;
   }, []);
 
-  // ─── Push local object changes (diff vs last-synced snapshot) ──
+  // ─── Пуш локальных изменений объектов (дифф к последнему снимку) ──
   const pushChanges = useCallback(async () => {
     const c = canvasRef.current;
     if (!c || !canEdit || !readyRef.current || savingRef.current) return;
-    // null ⇒ a gesture makes coordinates unstable (drawing/dragging/multi-select).
-    // Retry shortly. Note: this does NOT block while text-editing — committed
-    // objects still push; only the in-progress one is held back (see `held`).
+    // null ⇒ жест делает координаты нестабильными (рисование/перетаскивание/мультивыделение).
+    // Скоро повторим. NB: это НЕ блокирует во время набора текста — завершённые
+    // объекты всё равно пушатся; придерживается только тот, что в процессе (см. `held`).
     const state = c.getSyncState();
     if (!state) {
       if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -96,7 +96,7 @@ export default function WhiteboardApp({
       if (current[id] !== syncedSnapshot.current[id]) changes.push({ objectId: id, data: state.objects[id] });
     }
     for (const id in syncedSnapshot.current) {
-      // Absent because it's being edited (held) ⇒ not a deletion.
+      // Отсутствует, потому что редактируется (held) ⇒ не удаление.
       if (!(id in current) && !held.has(id)) changes.push({ objectId: id, deleted: true });
     }
 
@@ -115,7 +115,7 @@ export default function WhiteboardApp({
       if (!res.ok) throw new Error('save failed');
       const { rev } = await res.json();
       if (typeof rev === 'number') lastRev.current = rev;
-      // Commit exactly what we sent; edits made during the request stay dirty.
+      // Фиксируем ровно то, что отправили; правки во время запроса остаются «грязными».
       for (const ch of changes) {
         if (ch.deleted) delete syncedSnapshot.current[ch.objectId];
         else syncedSnapshot.current[ch.objectId] = JSON.stringify(ch.data);
@@ -126,7 +126,7 @@ export default function WhiteboardApp({
       setSaveStatus('unsaved');
     } finally {
       savingRef.current = false;
-      // Edits that landed mid-request (or a failed push) get flushed promptly.
+      // Правки, пришедшие во время запроса (или неудавшийся push), сбрасываем сразу.
       if (pendingSaveRef.current) {
         if (saveTimer.current) clearTimeout(saveTimer.current);
         saveTimer.current = setTimeout(() => pushRef.current(), 200);
@@ -136,7 +136,7 @@ export default function WhiteboardApp({
 
   useEffect(() => { pushRef.current = pushChanges; }, [pushChanges]);
 
-  // Debounced save fired on every local edit.
+  // Сохранение с дебаунсом, срабатывает на каждую локальную правку.
   const scheduleSave = useCallback(() => {
     if (!canEdit) return;
     pendingSaveRef.current = true;
@@ -145,8 +145,8 @@ export default function WhiteboardApp({
     saveTimer.current = setTimeout(() => pushRef.current(), 200);
   }, [canEdit]);
 
-  // ─── Pull peer changes and merge them object-by-object ────────
-  // Triggered instantly by SSE; also runs on a slow fallback interval.
+  // ─── Подтягиваем чужие изменения и сливаем по-объектно ────────
+  // Запускается мгновенно по SSE; плюс редкий резервный интервал.
   const pullNow = useCallback(async () => {
     if (!readyRef.current || isSyncing.current) return;
     isSyncing.current = true;
@@ -159,7 +159,7 @@ export default function WhiteboardApp({
       const incoming = (changes ?? []).filter((ch: any) => ch.updated_by !== currentUserId);
       if (incoming.length === 0) { lastRev.current = rev; return; }
 
-      // Don't merge while the local user is mid-interaction; retry next tick.
+      // Не сливаем, пока локальный пользователь в процессе; повтор на след. тике.
       if (canvasRef.current?.isBusy()) return;
 
       const { applied } = await canvasRef.current!.applyRemoteChanges(incoming);
@@ -169,17 +169,17 @@ export default function WhiteboardApp({
         if (ch.deleted) delete syncedSnapshot.current[ch.objectId];
         else syncedSnapshot.current[ch.objectId] = JSON.stringify(ch.data);
       }
-      // Advance the cursor only once the whole batch is merged, so anything
-      // deferred (a locked object) is re-offered on the next pull.
+      // Двигаем курсор только когда вся пачка слита, чтобы отложенное
+      // (заблокированный объект) было предложено снова на следующем pull.
       if (applied.length === incoming.length) lastRev.current = rev;
     } catch {
-      // ignore network errors
+      // игнорируем сетевые ошибки
     } finally {
       isSyncing.current = false;
     }
   }, [boardId, currentUserId]);
 
-  // Real-time: server pushes a "rev changed" signal → pull immediately.
+  // Реалтайм: сервер шлёт сигнал «rev изменился» → сразу делаем pull.
   useEffect(() => {
     let es: EventSource | null = null;
     let closed = false;
@@ -190,30 +190,30 @@ export default function WhiteboardApp({
         try {
           const { rev, by } = JSON.parse(e.data);
           if (typeof rev === 'number' && by !== currentUserId && rev > lastRev.current) pullNow();
-        } catch { /* ignore malformed */ }
+        } catch { /* игнорируем некорректное */ }
       };
-      // EventSource reconnects automatically on error; nothing to do here.
-    } catch { /* EventSource unavailable */ }
+      // EventSource сам переподключается при ошибке; делать ничего не нужно.
+    } catch { /* EventSource недоступен */ }
     return () => { closed = true; es?.close(); };
   }, [boardId, currentUserId, pullNow]);
 
-  // Fallback poll (covers missed SSE events / multi-process / SSE down).
+  // Резервный опрос (покрывает пропущенные SSE / multi-process / падение SSE).
   useEffect(() => {
     const interval = setInterval(() => pullNow(), 5_000);
     return () => clearInterval(interval);
   }, [pullNow]);
 
-  // ─── Backstop: flush pending edits if a push previously failed ─
+  // ─── Подстраховка: сбрасываем ожидающие правки, если push ранее упал ─
   useEffect(() => {
     if (!canEdit) return;
     const interval = setInterval(() => { if (pendingSaveRef.current) pushRef.current(); }, 15_000);
     return () => clearInterval(interval);
   }, [canEdit]);
 
-  // Flush any pending save on unmount / tab close.
+  // Сбрасываем ожидающее сохранение при размонтировании / закрытии вкладки.
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
 
-  // ─── Keyboard shortcuts ───────────────────────────────────────
+  // ─── Горячие клавиши ───────────────────────────────────────
   useEffect(() => {
     if (!canEdit) return;
     function onKey(e: KeyboardEvent) {
@@ -250,10 +250,10 @@ export default function WhiteboardApp({
     return () => window.removeEventListener('keydown', onKey);
   }, [hasSelection, canEdit]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─── Save (explicit flush: Ctrl+S / toolbar button) ───────────
+  // ─── Сохранение (явный сброс: Ctrl+S / кнопка панели) ───────────
   const triggerSave = useCallback(() => { pushChanges(); }, [pushChanges]);
 
-  // ─── Rename ───────────────────────────────────────────────────
+  // ─── Переименование ───────────────────────────────────────────────────
   const handleRename = useCallback(async (newName: string) => {
     setName(newName);
     await fetch(`/api/boards/${boardId}`, {
@@ -263,7 +263,7 @@ export default function WhiteboardApp({
     });
   }, [boardId]);
 
-  // ─── Image upload ─────────────────────────────────────────────
+  // ─── Загрузка изображения ─────────────────────────────────────────────
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !canvasRef.current) return;

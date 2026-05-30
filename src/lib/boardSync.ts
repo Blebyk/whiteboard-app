@@ -3,17 +3,17 @@ import db from '@/lib/db';
 
 export interface ObjectChange {
   objectId: string;
-  data?: unknown;   // fabric object JSON for an upsert
+  data?: unknown;   // JSON объекта Fabric для upsert
   deleted?: boolean;
 }
 
 /**
- * Seed the per-object table from the legacy whole-canvas `canvasState`, exactly
- * once per board. Each object is given a stable `data.id` and `canvasState` is
- * rewritten with those ids, so every client that opens the board afterwards
- * loads the same ids and incremental diffing works from the first edit.
+ * Засеивает по-объектную таблицу из устаревшего цельного `canvasState` ровно
+ * один раз на доску. Каждому объекту присваивается стабильный `data.id`, а
+ * `canvasState` перезаписывается с этими id, чтобы любой клиент, открывающий
+ * доску позже, грузил те же id и инкрементальный дифф работал с первой правки.
  *
- * No-op when the board already has object rows (or has no content to seed).
+ * No-op, если у доски уже есть строки объектов (или нет содержимого для сидинга).
  */
 export function ensureBoardObjects(boardId: number): void {
   const { n } = db
@@ -44,7 +44,7 @@ export function ensureBoardObjects(boardId: number): void {
       if (!obj.data.id) obj.data.id = randomUUID();
       insert.run(boardId, obj.data.id as string, JSON.stringify(obj));
     }
-    // Persist the ids back into the cached full snapshot.
+    // Сохраняем id обратно в кэшированный полный снимок.
     db.prepare('UPDATE boards SET canvasState = ? WHERE id = ?').run(
       JSON.stringify(parsed),
       boardId
@@ -54,9 +54,10 @@ export function ensureBoardObjects(boardId: number): void {
 }
 
 /**
- * Apply a batch of object changes from one client, bump the board revision and
- * rebuild the cached `canvasState`. Returns the new revision. Per-object
- * last-writer-wins: the last push to reach the server wins for a given object.
+ * Применяет пачку изменений объектов от одного клиента, поднимает ревизию доски
+ * и пересобирает кэшированный `canvasState`. Возвращает новую ревизию. Стратегия
+ * last-writer-wins по объекту: для данного объекта побеждает последний дошедший
+ * до сервера пуш.
  */
 export function applyObjectChanges(
   boardId: number,
@@ -90,7 +91,7 @@ export function applyObjectChanges(
       else upsert.run(boardId, ch.objectId, JSON.stringify(ch.data), newRev, userId);
     }
 
-    // Rebuild the cached full snapshot used for first paint / thumbnails.
+    // Пересобираем кэшированный полный снимок для первой отрисовки / превью.
     const rows = db
       .prepare('SELECT data FROM board_objects WHERE boardId = ? AND deleted = 0 ORDER BY rowid')
       .all(boardId) as Array<{ data: string }>;

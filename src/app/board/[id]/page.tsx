@@ -28,8 +28,8 @@ export default async function BoardPage({ params }: { params: Promise<{ id: stri
     canEdit = share?.role === 'editor';
   }
 
-  // Give existing objects stable ids before first render so every client that
-  // opens this board shares the same ids; then read back the seeded snapshot.
+  // Присваиваем существующим объектам стабильные id до первой отрисовки, чтобы
+  // все клиенты, открывающие доску, делили одни id; затем читаем засеянный снимок.
   ensureBoardObjects(board.id);
   const synced = db.prepare('SELECT canvasState, rev FROM boards WHERE id = ?')
     .get(board.id) as { canvasState: string | null; rev: number };

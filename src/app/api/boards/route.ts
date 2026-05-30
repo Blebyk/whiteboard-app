@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 
-// Defensive: ensure board_shares exists (older DBs / cached HMR singletons
-// may not have run the CREATE TABLE statement yet).
+// Защитно: убеждаемся, что board_shares существует (старые БД / кэшированные
+// HMR-синглтоны могли не выполнить CREATE TABLE).
 db.exec(`
   CREATE TABLE IF NOT EXISTS board_shares (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -21,8 +21,8 @@ export async function GET() {
     const user = await getSessionUser();
     if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 });
 
-    // Owned boards + boards shared with me. `shared = 1` marks ones I don't own.
-    // `ownerName` is only meaningful for shared boards (NULL for own ones).
+    // Свои доски + расшаренные мне. `shared = 1` помечает не мои.
+    // `ownerName` имеет смысл только для расшаренных досок (NULL для своих).
     const boards = db
       .prepare(`
         SELECT id, name, thumbnail, created_at, updated_at, 0 AS shared, NULL AS ownerName

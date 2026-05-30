@@ -7,11 +7,11 @@ const SUCCESS_CTA = '#28a745';
 const BLUE_LEGACY = '#007bff';
 const FG3 = '#555555';
 
-// ────────────────────────────── Sticky-note backdrop
-// Statically positioned via SVG so they never get clipped by parent layout.
+// ────────────────────────────── Фон со стикерами
+// Статично позиционированы через SVG, чтобы их не обрезал родительский layout.
 function HeroStickyIllustration() {
   const stickies = [
-    // ── left cluster (top to bottom)
+    // ── левая группа (сверху вниз)
     { x: 50,  y: 60,  w: 60, h: 60, color: '#fff2a8', r: -8 },
     { x: 130, y: 110, w: 64, h: 60, color: '#fcb4b4', r: -3 },
     { x: 28,  y: 158, w: 66, h: 66, color: '#fdd9a3', r: 6 },
@@ -19,7 +19,7 @@ function HeroStickyIllustration() {
     { x: 36,  y: 282, w: 70, h: 68, color: '#a0e7b3', r: -6 },
     { x: 140, y: 336, w: 82, h: 78, color: '#fbb775', r: -10 },
     { x: 50,  y: 412, w: 68, h: 62, color: '#fbe4a0', r: 4 },
-    // ── right cluster
+    // ── правая группа
     { x: 870, y: 64,  w: 60, h: 56, color: '#fff2a8', r: 6 },
     { x: 780, y: 110, w: 64, h: 60, color: '#a0e7b3', r: -4 },
     { x: 916, y: 156, w: 70, h: 68, color: '#cdb4fc', r: 5 },
@@ -51,7 +51,7 @@ function HeroStickyIllustration() {
   );
 }
 
-// ────────────────────────────── Icon set (Lucide-style)
+// ────────────────────────────── Набор иконок (в стиле Lucide)
 function Icon({ name, size = 32, color = PRIMARY }: { name: string; size?: number; color?: string }) {
   const common = {
     width: size, height: size, viewBox: '0 0 24 24',
@@ -107,7 +107,7 @@ function Icon({ name, size = 32, color = PRIMARY }: { name: string; size?: numbe
   }
 }
 
-// ────────────────────────────── Header
+// ────────────────────────────── Шапка
 function MarketingHeader() {
   return (
     <header style={{
@@ -144,7 +144,7 @@ function MarketingHeader() {
   );
 }
 
-// ────────────────────────────── Hero
+// ────────────────────────────── Главный экран
 function Hero() {
   return (
     <section style={{
@@ -193,7 +193,7 @@ function Hero() {
   );
 }
 
-// ────────────────────────────── Feature card
+// ────────────────────────────── Карточка фичи
 interface FeatureCardProps {
   icons: { name: string; size?: number }[];
   title: string;
@@ -231,7 +231,7 @@ function FeatureCard({ icons, title, description }: FeatureCardProps) {
   );
 }
 
-// ────────────────────────────── Features grid
+// ────────────────────────────── Сетка фич
 function Features() {
   return (
     <section style={{
@@ -266,7 +266,7 @@ function Features() {
   );
 }
 
-// ────────────────────────────── Page
+// ────────────────────────────── Страница
 export default function MainPage() {
   return (
     <div style={{
@@ -275,7 +275,7 @@ export default function MainPage() {
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column',
-      // Grid pattern across the WHOLE page, with the gradient layered on top
+      // Сетка-паттерн на ВСЮ страницу, поверх — градиент
       backgroundImage:
         `linear-gradient(180deg,
            rgba(255,255,255,0.85) 0%,
@@ -287,7 +287,7 @@ export default function MainPage() {
       backgroundSize: '100% 100%, 32px 32px, 32px 32px',
       backgroundPosition: '0 0, -1px -1px, -1px -1px',
     }}>
-      {/* Stickies live behind everything, full-page */}
+      {/* Стикеры лежат позади всего, на всю страницу */}
       <div style={{
         position: 'absolute',
         inset: 0,

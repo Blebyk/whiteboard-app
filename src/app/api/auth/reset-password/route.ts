@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       'UPDATE users SET password = ?, resetToken = NULL, resetTokenExpiry = NULL WHERE id = ?'
     ).run(hashedPassword, user.id);
 
-    // Invalidate all existing sessions for security
+    // Аннулируем все существующие сессии в целях безопасности
     db.prepare('DELETE FROM sessions WHERE userId = ?').run(user.id);
 
     return NextResponse.json({ success: true });

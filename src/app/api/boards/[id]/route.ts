@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 
-// Defensive table creation
+// Защитное создание таблицы
 db.exec(`
   CREATE TABLE IF NOT EXISTS board_shares (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -15,7 +15,7 @@ db.exec(`
   );
 `);
 
-/** Returns the board if the user is the owner OR has been shared with. */
+/** Возвращает доску, если пользователь владелец ИЛИ ему её расшарили. */
 function getAccessibleBoard(userId: number, boardId: number) {
   return db
     .prepare(`
@@ -45,7 +45,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const board = getAccessibleBoard(user.id, Number(id));
   if (!board) return NextResponse.json({ error: 'Доска не найдена' }, { status: 404 });
 
-  // Viewers cannot save
+  // Зрители не могут сохранять
   const isOwner = board.userId === user.id;
   if (!isOwner) {
     const share = db.prepare('SELECT role FROM board_shares WHERE boardId = ? AND userId = ?')
@@ -78,13 +78,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 });
 
   const { id } = await params;
-  // Only the owner can delete. Shared users can only revoke their own share.
+  // Удалять может только владелец. Шареные пользователи могут лишь снять свой доступ.
   const owned = db.prepare('SELECT * FROM boards WHERE id = ? AND userId = ?').get(Number(id), user.id);
   if (owned) {
     db.prepare('DELETE FROM boards WHERE id = ?').run(Number(id));
     return NextResponse.json({ success: true });
   }
-  // Shared user removing themselves
+  // Шареный пользователь убирает себя
   const share = db.prepare('SELECT * FROM board_shares WHERE boardId = ? AND userId = ?').get(Number(id), user.id);
   if (share) {
     db.prepare('DELETE FROM board_shares WHERE boardId = ? AND userId = ?').run(Number(id), user.id);

@@ -173,6 +173,10 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
   // слияние и перепозиционирование панели и не дёргать объект во время перетаскивания).
   const draggingRef = useRef(false);
 
+  // true во время programmatic-обновления свойств (e.g. live-перетаскивание слайдера размера шрифта).
+  // Подавляет один вызов onSelectionChange из after:render, чтобы FloatingToolbar не прыгала.
+  const suppressSelChangeRef = useRef(false);
+
   // Id группы стикера, которую сейчас редактируют как текст. Во время правки
   // группа разбирается на временные части; мы «придерживаем» этот id, чтобы слой
   // синка не пушил полуготовое состояние и не принял его отсутствие за удаление.
@@ -912,6 +916,9 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       let rafPending = false;
       canvas.on('after:render', () => {
         if (rafPending || draggingRef.current) return;
+        // Во время live-обновления свойств (напр. ползунок размера шрифта) пропускаем
+        // repositioning панели — иначе FloatingToolbar прыгает под курсором.
+        if (suppressSelChangeRef.current) { suppressSelChangeRef.current = false; return; }
         const obj = canvas.getActiveObject();
         if (!obj) return;
         rafPending = true;
@@ -1259,6 +1266,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
           obj.setCoords();
         }
       });
+      if (skipHistory) suppressSelChangeRef.current = true;
       c.requestRenderAll();
       if (!skipHistory) pushHistory();
     },

@@ -1,14 +1,23 @@
 import { NextRequest } from 'next/server';
+import { randomUUID } from 'crypto';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { subscribe } from '@/lib/boardEvents';
+import {
+  joinPresence,
+  leavePresence,
+  touchPresence,
+  subscribePresence,
+} from '@/lib/boardPresence';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 // GET /api/boards/[id]/events — поток Server-Sent Events.
-// Шлёт `{ rev, by }` при каждом изменении доски, чтобы клиент сразу подтянул
-// дифф, а не ждал следующего опроса.
+// Один канал шлёт два типа сообщений:
+//   { type: 'sync', rev, by }      — доска изменилась, клиент подтягивает дифф;
+//   { type: 'presence', users }    — изменился список тех, кто сейчас на доске.
+// Само открытие/закрытие этого потока и есть сигнал присутствия пользователя.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser();
   if (!user) return new Response('Не авторизован', { status: 401 });
@@ -25,7 +34,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!ok) return new Response('Доска не найдена', { status: 404 });
 
   const encoder = new TextEncoder();
+  const connId = randomUUID(); // уникальный id этого соединения (для multi-tab presence)
   let unsubscribe = () => {};
+  let unsubscribePresence = () => {};
   let heartbeat: ReturnType<typeof setInterval> | undefined;
 
   const stream = new ReadableStream({
@@ -37,18 +48,27 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       // Стартовое событие с текущим rev, чтобы только что (пере)подключившийся
       // клиент догнал то, что пропустил, пока был офлайн.
       const cur = db.prepare('SELECT rev FROM boards WHERE id = ?').get(boardId) as { rev: number } | undefined;
-      send({ rev: cur?.rev ?? 0, by: null });
+      send({ type: 'sync', rev: cur?.rev ?? 0, by: null });
 
-      unsubscribe = subscribe(boardId, send);
+      unsubscribe = subscribe(boardId, (e) => send({ type: 'sync', rev: e.rev, by: e.by }));
+      unsubscribePresence = subscribePresence(boardId, (users) => send({ type: 'presence', users }));
 
-      // Heartbeat-комментарий не даёт прокси/браузеру закрыть простаивающий поток.
+      // Регистрируем присутствие после подписки, чтобы joinPresence разослал
+      // обновлённый список и этому клиенту тоже (увидит себя и остальных).
+      joinPresence(boardId, user, connId);
+
+      // Heartbeat-комментарий не даёт прокси/браузеру закрыть простаивающий поток
+      // и заодно продлевает запись о присутствии.
       heartbeat = setInterval(() => {
+        touchPresence(boardId, user.id, connId);
         try { controller.enqueue(encoder.encode(': ping\n\n')); } catch { /* закрыт */ }
       }, 25_000);
 
       const onAbort = () => {
         if (heartbeat) clearInterval(heartbeat);
         unsubscribe();
+        unsubscribePresence();
+        leavePresence(boardId, user.id, connId);
         try { controller.close(); } catch { /* уже закрыт */ }
       };
       req.signal.addEventListener('abort', onAbort);
@@ -56,6 +76,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     cancel() {
       if (heartbeat) clearInterval(heartbeat);
       unsubscribe();
+      unsubscribePresence();
+      leavePresence(boardId, user.id, connId);
     },
   });
 

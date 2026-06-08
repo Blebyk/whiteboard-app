@@ -7,6 +7,7 @@ import TopBar from './TopBar';
 import PropertiesPanel from './PropertiesPanel';
 import FloatingToolbar from './FloatingToolbar';
 import type { Tool, CanvasRef, SelectionInfo } from './Canvas';
+import type { PresenceUser } from '@/lib/boardPresence';
 
 interface Props {
   boardId: number;
@@ -40,6 +41,7 @@ export default function WhiteboardApp({
   const [selectionInfo, setSelectionInfo] = useState<SelectionInfo | null>(null);
   const [name, setName] = useState(boardName);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  const [presence, setPresence] = useState<PresenceUser[]>([]); // кто сейчас на доске
 
   // ─── Состояние синхронизации по объектам ──────────────────────────────────
   const lastRev = useRef<number>(initialRev);              // макс. ревизия сервера, которую применили
@@ -50,6 +52,8 @@ export default function WhiteboardApp({
   const pendingSaveRef = useRef(false);                    // локальные правки ждут push
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pushRef = useRef<() => void>(() => {});            // всегда актуальный pushChanges
+  const selTimer = useRef<ReturnType<typeof setTimeout> | null>(null); // дебаунс отправки выделения
+  const lastSelSent = useRef<string>('');                  // последнее отправленное выделение (антидубль)
 
   // ─── Сохраняем bgStyle сразу при изменении (кроме первого монтажа) ────
   useEffect(() => {
@@ -137,12 +141,13 @@ export default function WhiteboardApp({
   useEffect(() => { pushRef.current = pushChanges; }, [pushChanges]);
 
   // Сохранение с дебаунсом, срабатывает на каждую локальную правку.
+  // Короткий интервал, чтобы при наборе текста буквы появлялись у соседей почти мгновенно.
   const scheduleSave = useCallback(() => {
     if (!canEdit) return;
     pendingSaveRef.current = true;
     setSaveStatus('unsaved');
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => pushRef.current(), 200);
+    saveTimer.current = setTimeout(() => pushRef.current(), 50);
   }, [canEdit]);
 
   // ─── Подтягиваем чужие изменения и сливаем по-объектно ────────
@@ -188,7 +193,13 @@ export default function WhiteboardApp({
       es.onmessage = (e) => {
         if (closed) return;
         try {
-          const { rev, by } = JSON.parse(e.data);
+          const msg = JSON.parse(e.data);
+          if (msg.type === 'presence') {
+            setPresence(Array.isArray(msg.users) ? msg.users : []);
+            return;
+          }
+          // type === 'sync' (или старый формат без поля type)
+          const { rev, by } = msg;
           if (typeof rev === 'number' && by !== currentUserId && rev > lastRev.current) pullNow();
         } catch { /* игнорируем некорректное */ }
       };
@@ -202,6 +213,31 @@ export default function WhiteboardApp({
     const interval = setInterval(() => pullNow(), 5_000);
     return () => clearInterval(interval);
   }, [pullNow]);
+
+  // ─── Presence: публикуем своё выделение (с дебаунсом и антидублем) ──
+  const sendSelection = useCallback((ids: string[]) => {
+    if (selTimer.current) clearTimeout(selTimer.current);
+    selTimer.current = setTimeout(() => {
+      const key = ids.slice().sort().join(',');
+      if (key === lastSelSent.current) return; // не шлём то же самое повторно
+      lastSelSent.current = key;
+      fetch(`/api/boards/${boardId}/presence`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ selection: ids }),
+      }).catch(() => {});
+    }, 120);
+  }, [boardId]);
+
+  // ─── Presence: подсвечиваем на холсте объекты, выделенные другими ──
+  useEffect(() => {
+    const list = presence
+      .filter((u) => u.id !== currentUserId)
+      .flatMap((u) =>
+        (u.selection ?? []).map((objectId) => ({ userId: u.id, objectId, color: u.color, name: u.name }))
+      );
+    canvasRef.current?.setRemoteSelections(list);
+  }, [presence, currentUserId]);
 
   // ─── Подстраховка: сбрасываем ожидающие правки, если push ранее упал ─
   useEffect(() => {
@@ -284,6 +320,8 @@ export default function WhiteboardApp({
         boardName={name}
         isOwner={isOwner}
         canEdit={canEdit}
+        currentUserId={currentUserId}
+        presence={presence}
         saveStatus={saveStatus}
         zoom={zoom}
         canUndo={canUndo}
@@ -319,6 +357,7 @@ export default function WhiteboardApp({
             initialState={initialState}
             onReady={handleReady}
             onChange={scheduleSave}
+            onLocalSelectionIds={sendSelection}
             onHistoryChange={(u, r) => { setCanUndo(u); setCanRedo(r); }}
             onZoomChange={setZoom}
             onSelectionChange={(active, info) => {

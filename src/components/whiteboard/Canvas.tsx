@@ -34,6 +34,14 @@ export interface SelectionInfo {
   isSticker: boolean;
 }
 
+/** Выделение другого пользователя — для подсветки его объектов в его цвете. */
+export interface RemoteSelection {
+  userId: number;
+  objectId: string;
+  color: string;
+  name: string;
+}
+
 
 export interface RemoteChange {
   objectId: string;
@@ -64,6 +72,8 @@ export interface CanvasRef {
   getSyncState(): { objects: Record<string, any>; meta: any; held: string[] } | null;
   /** Сливает чужие изменения объектов на месте. Возвращает id, которые обработал (применён/уже актуален/уже удалён). */
   applyRemoteChanges(changes: RemoteChange[]): Promise<{ applied: string[] }>;
+  /** Подсветить объекты, выделенные сейчас другими пользователями. */
+  setRemoteSelections(sels: RemoteSelection[]): void;
 }
 
 export interface CanvasProps {
@@ -82,6 +92,8 @@ export interface CanvasProps {
   onReady?(): void;
   /** Срабатывает на каждую зафиксированную локальную правку (для синка с дебаунсом). */
   onChange?(): void;
+  /** Срабатывает при изменении локального выделения — id выделенных объектов (для presence). */
+  onLocalSelectionIds?(ids: string[]): void;
 }
 
 /** Стабильный id объекта, нужен для слияния изменений между соавторами. */
@@ -165,10 +177,20 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
   // группа разбирается на временные части; мы «придерживаем» этот id, чтобы слой
   // синка не пушил полуготовое состояние и не принял его отсутствие за удаление.
   const editingStickerId = useRef<string | null>(null);
+  // Снимок цельной группы-стикера, снятый перед входом в правку. Пока правка идёт,
+  // живая группа разобрана на части (excludeFromSync), поэтому в синк уходит этот
+  // снимок (с подставленным живым текстом) под стабильным id — иначе соседи увидели
+  // бы новый стикер только после выхода из правки.
+  const stickerSnapshot = useRef<{ id: string; obj: any } | null>(null);
 
 
   // Ref обработчика фона (для очистки при смене стиля)
   const bgHandlerRef = useRef<(() => void) | null>(null);
+
+  // Слой подсветки чужих выделений (DOM-оверлей поверх холста) и делегат, через
+  // который imperative-метод setRemoteSelections достаёт логику из setup-эффекта.
+  const remoteLayerRef = useRef<HTMLDivElement>(null);
+  const setRemoteSelRef = useRef<(sels: RemoteSelection[]) => void>(() => {});
 
   // ─── Помощники истории ───────────────────────────────────────────
   const pushHistory = useCallback(() => {
@@ -475,6 +497,12 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         if (!sticker || !sticker.data?.isSticker) return;
 
         const stickerId = sticker.data?.id;
+        // Снимаем снимок цельной группы ДО разбора — пока идёт правка, именно он
+        // уходит в синк (с живым текстом), чтобы стикер был виден соседям сразу.
+        if (stickerId) stickerSnapshot.current = { id: stickerId, obj: sticker.toObject(['data']) };
+        // Помечаем правку ДО разбора группы: тогда любое событие выделения при входе
+        // в правку сообщит id стикера, и presence-подсветка у соседей не пропадёт.
+        editingStickerId.current = stickerId ?? null;
         const items: any[] = sticker.removeAll();
         canvas.remove(sticker);
 
@@ -491,9 +519,13 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         // придерживаем id группы, чтобы соседи не видели исчезновение/мерцание стикера.
         rect.excludeFromSync = true;
         textbox.excludeFromSync = true;
-        editingStickerId.current = stickerId ?? null;
 
-        const onChange = () => fitStickerText(rect, textbox);
+        const onChange = () => {
+          fitStickerText(rect, textbox);
+          // Планируем синк (без записи в историю undo) — текст стикера виден
+          // соседям по мере ввода через снимок в getSyncState.
+          pRef.current.onChange?.();
+        };
         fitStickerText(rect, textbox);
 
         canvas.add(rect);
@@ -506,6 +538,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         const onExit = () => {
           textbox.off('changed', onChange);
           textbox.off('editing:exited', onExit);
+          stickerSnapshot.current = null; // правка завершена — снимок больше не нужен
           fitStickerText(rect, textbox);
 
           canvas.remove(rect);
@@ -637,7 +670,9 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
             evented: true,
             subTargetCheck: false,
           });
-          (sticker as any).data = { isSticker: true };
+          // Стабильный id с рождения: иначе стикер уходит в правку без id и не
+          // попадает в синк, пока его не закроют (баг «виден только после правки»).
+          (sticker as any).data = { isSticker: true, id: genId() };
           canvas.add(sticker);
           canvas.setActiveObject(sticker);
           canvas.requestRenderAll();
@@ -829,10 +864,25 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         };
       };
 
+      // id выделенных объектов (для presence-подсветки у соседей).
+      const getSelectedIds = (): string[] => {
+        // Во время правки текста стикера активен временный textbox без id —
+        // сообщаем id самого стикера, чтобы соседи продолжали его подсвечивать.
+        if (editingStickerId.current) return [editingStickerId.current];
+        const obj = canvas.getActiveObject();
+        if (!obj) return [];
+        const t = obj.type;
+        if (t === 'active-selection' || t === 'activeselection') {
+          return ((obj as any).getObjects?.() || []).map((o: any) => o?.data?.id).filter(Boolean);
+        }
+        return (obj as any).data?.id ? [(obj as any).data.id] : [];
+      };
+      const emitSelection = () => pRef.current.onLocalSelectionIds?.(getSelectedIds());
+
       // ── События выделения ────────────────────────────────────
-      canvas.on('selection:created', () => pRef.current.onSelectionChange(true, getSelectionInfo()));
-      canvas.on('selection:updated', () => pRef.current.onSelectionChange(true, getSelectionInfo()));
-      canvas.on('selection:cleared', () => pRef.current.onSelectionChange(false));
+      canvas.on('selection:created', () => { pRef.current.onSelectionChange(true, getSelectionInfo()); emitSelection(); });
+      canvas.on('selection:updated', () => { pRef.current.onSelectionChange(true, getSelectionInfo()); emitSelection(); });
+      canvas.on('selection:cleared', () => { pRef.current.onSelectionChange(false); pRef.current.onLocalSelectionIds?.([]); });
 
       // Прячем плавающую панель при перетаскивании/ресайзе, чтобы не дёргалась
       canvas.on('object:moving', () => {
@@ -872,6 +922,82 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         });
       });
 
+      // ── Подсветка чужих выделений (DOM-оверлей поверх холста) ──────
+      // Ключ записи: `${userId}:${objectId}`. div переиспользуется между кадрами;
+      // позиция берётся из getBoundingRect() (уже в экранных координатах холста),
+      // поэтому корректно следует за зумом / паном / перемещением объекта.
+      const remoteEls = new Map<string, HTMLDivElement>();
+
+      const positionRemote = () => {
+        const layer = remoteLayerRef.current;
+        if (!layer || remoteEls.size === 0) return;
+        const vpt = canvas.viewportTransform as number[] | undefined;
+        if (!vpt) return;
+        const zoom = vpt[0], ox = vpt[4], oy = vpt[5];
+        const byId = new Map<string, any>();
+        canvas.getObjects().forEach((o: any) => { const id = o?.data?.id; if (id) byId.set(id, o); });
+        for (const el of remoteEls.values()) {
+          const obj = byId.get(el.dataset.objId || '');
+          if (!obj) { el.style.display = 'none'; continue; }
+          obj.setCoords?.();
+          // Мировые углы объекта (aCoords) → экранные координаты вручную через vpt
+          // (world*zoom + pan), как и фон доски. Надёжнее getBoundingRect(), у которого
+          // в этой версии Fabric неоднозначный учёт вьюпорта/DPR.
+          const a = obj.aCoords;
+          if (!a) { el.style.display = 'none'; continue; }
+          const xs = [a.tl.x, a.tr.x, a.br.x, a.bl.x];
+          const ys = [a.tl.y, a.tr.y, a.br.y, a.bl.y];
+          const wl = Math.min(...xs), wt = Math.min(...ys);
+          const ww = Math.max(...xs) - wl, wh = Math.max(...ys) - wt;
+          el.style.display = 'block';
+          el.style.left = `${wl * zoom + ox}px`;
+          el.style.top = `${wt * zoom + oy}px`;
+          el.style.width = `${ww * zoom}px`;
+          el.style.height = `${wh * zoom}px`;
+        }
+      };
+
+      const rebuildRemote = (sels: RemoteSelection[]) => {
+        const layer = remoteLayerRef.current;
+        if (!layer) return;
+        const wanted = new Map<string, RemoteSelection>();
+        for (const s of sels) if (s.objectId) wanted.set(`${s.userId}:${s.objectId}`, s);
+
+        // Убираем подсветки, которых больше нет.
+        for (const [key, el] of remoteEls) {
+          if (!wanted.has(key)) { el.remove(); remoteEls.delete(key); }
+        }
+        // Создаём/обновляем остальные.
+        for (const [key, s] of wanted) {
+          let el = remoteEls.get(key);
+          if (!el) {
+            el = document.createElement('div');
+            el.style.cssText =
+              'position:absolute;pointer-events:none;box-sizing:border-box;border-radius:3px;display:none;z-index:5;';
+            const label = document.createElement('div');
+            label.style.cssText =
+              'position:absolute;left:-2px;top:-19px;color:#fff;font:600 11px/1 Arial,sans-serif;' +
+              'padding:3px 6px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.25);';
+            el.appendChild(label);
+            layer.appendChild(el);
+            remoteEls.set(key, el);
+          }
+          el.dataset.objId = s.objectId;
+          el.style.border = `2px solid ${s.color}`;
+          const label = el.firstChild as HTMLDivElement;
+          label.style.background = s.color;
+          label.textContent = s.name;
+        }
+      };
+
+      canvas.on('after:render', positionRemote);
+      // Imperative-метод setRemoteSelections делегирует сюда.
+      setRemoteSelRef.current = (sels: RemoteSelection[]) => { rebuildRemote(sels); positionRemote(); };
+
+
+      // Набор текста (обычный текст и стикеры) → планируем синк, чтобы буквы
+      // появлялись у соседей сразу по мере ввода, а не только после выхода из правки.
+      canvas.on('text:changed', () => pRef.current.onChange?.());
 
       // ── Объект изменён ──────────────────────────────────────
       canvas.on('object:modified', pushHistory);
@@ -1164,11 +1290,9 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       // содержимое «плавает») и сообщается как «held», чтобы вызывающий сохранил его,
       // а не счёл отсутствие удалением. Для стикера живая группа разобрана на
       // временные части, поэтому придерживаем id исходной группы.
-      const held: string[] = [];
       let editingId: string | null = null;
       if (ao && ao.isEditing) {
         editingId = editingStickerId.current || (ao.data && ao.data.id) || null;
-        if (editingId) held.push(editingId);
       }
 
       const full = c.toObject(['data']);
@@ -1176,9 +1300,33 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       for (const o of full.objects ?? []) {
         if (o.excludeFromSync) continue;       // временные части стикера в правке
         const id = o?.data?.id;
-        if (!id || id === editingId) continue; // пропускаем объект в процессе
-        objects[id] = o;
+        if (!id) continue;
+        objects[id] = o;                       // редактируемый текст тоже идёт в синк — буквы видны соседям сразу
       }
+
+      const held: string[] = [];
+      const snap = stickerSnapshot.current;
+      if (editingId && snap && snap.id === editingId && snap.obj) {
+        // Стикер в правке: живая группа разобрана на части (excludeFromSync), поэтому
+        // отдаём в синк ранее снятый снимок группы под её стабильным id, подставив
+        // живой текст. Так соседи видят стикер сразу при создании и текст по мере ввода.
+        const clone: any = { ...snap.obj };
+        if (ao && typeof ao.text === 'string' && Array.isArray(snap.obj.objects)) {
+          // Текстовый child ищем по наличию свойства text, а НЕ по type: в сериализации
+          // Fabric v6 тип идёт как 'Textbox' (PascalCase), поэтому сравнение с 'textbox'
+          // не срабатывало — живой текст не подставлялся, и стикер обновлялся у соседей
+          // только после выхода из правки.
+          clone.objects = snap.obj.objects.map((x: any) =>
+            x && typeof x.text === 'string' ? { ...x, text: ao.text, fontSize: ao.fontSize ?? x.fontSize } : x
+          );
+        }
+        objects[editingId] = clone;
+      }
+      // Подстраховка: если редактируемый объект всё же не попал в objects
+      // (например, отсутствует снимок стикера) — придерживаем его id, чтобы
+      // отсутствие не сочли удалением.
+      if (editingId && !(editingId in objects)) held.push(editingId);
+
       const meta: any = { ...full };
       delete meta.objects;
       return { objects, meta, held };
@@ -1257,11 +1405,16 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       }
       return { applied };
     },
+    setRemoteSelections(sels) {
+      setRemoteSelRef.current(sels || []);
+    },
   }), [applyTool, applyBackground, pushHistory]);
 
   return (
-    <div ref={containerRef} style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+    <div ref={containerRef} style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
       <canvas ref={canvasElRef} />
+      {/* Слой подсветки выделений других пользователей (не перехватывает мышь). */}
+      <div ref={remoteLayerRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }} />
     </div>
   );
 });

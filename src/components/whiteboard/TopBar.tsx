@@ -3,12 +3,16 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import ShareButton from './ShareButton';
+import PresenceAvatars from './PresenceAvatars';
+import type { PresenceUser } from '@/lib/boardPresence';
 
 interface TopBarProps {
   boardId: number;
   boardName: string;
   isOwner: boolean;
   canEdit: boolean;
+  currentUserId: number;
+  presence: PresenceUser[];
   saveStatus: 'saved' | 'saving' | 'unsaved';
   zoom: number;
   canUndo: boolean;
@@ -91,6 +95,8 @@ export default function TopBar({
   boardName,
   isOwner,
   canEdit,
+  currentUserId,
+  presence,
   saveStatus,
   zoom,
   canUndo,
@@ -304,6 +310,9 @@ export default function TopBar({
             onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = 'white')}
           >+</button>
         </div>
+
+        {/* Кто сейчас на доске (ничего не рисует, если ты один) */}
+        <PresenceAvatars users={presence} currentUserId={currentUserId} />
 
         {/* Поделиться — доступом управляет только владелец */}
         {isOwner && <ShareButton boardId={boardId} />}

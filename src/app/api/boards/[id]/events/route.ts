@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { randomUUID } from 'crypto';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
-import { subscribe } from '@/lib/boardEvents';
+import { subscribe, subscribeTaskUpdates } from '@/lib/boardEvents';
 import {
   joinPresence,
   leavePresence,
@@ -37,6 +37,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const connId = randomUUID(); // уникальный id этого соединения (для multi-tab presence)
   let unsubscribe = () => {};
   let unsubscribePresence = () => {};
+  let unsubscribeTasks = () => {};
   let heartbeat: ReturnType<typeof setInterval> | undefined;
 
   const stream = new ReadableStream({
@@ -52,6 +53,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
       unsubscribe = subscribe(boardId, (e) => send({ type: 'sync', rev: e.rev, by: e.by }));
       unsubscribePresence = subscribePresence(boardId, (users) => send({ type: 'presence', users }));
+      unsubscribeTasks = subscribeTaskUpdates(boardId, (e) => send({ type: 'task_update', by: e.by }));
 
       // Регистрируем присутствие после подписки, чтобы joinPresence разослал
       // обновлённый список и этому клиенту тоже (увидит себя и остальных).
@@ -68,6 +70,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         if (heartbeat) clearInterval(heartbeat);
         unsubscribe();
         unsubscribePresence();
+        unsubscribeTasks();
         leavePresence(boardId, user.id, connId);
         try { controller.close(); } catch { /* уже закрыт */ }
       };
@@ -77,6 +80,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       if (heartbeat) clearInterval(heartbeat);
       unsubscribe();
       unsubscribePresence();
+      unsubscribeTasks();
       leavePresence(boardId, user.id, connId);
     },
   });

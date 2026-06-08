@@ -66,6 +66,21 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
 
   useEffect(() => { loadTasks(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Real-time синхронизация: подписываемся на SSE-поток доски и перезагружаем
+  // задачи, когда другой пользователь создаёт / обновляет / удаляет задачу.
+  useEffect(() => {
+    const es = new EventSource(`/api/boards/${boardId}/events`);
+    es.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'task_update' && msg.by !== currentUserId) {
+          loadTasks();
+        }
+      } catch { /* игнорируем невалидный фрейм */ }
+    };
+    return () => es.close();
+  }, [boardId, currentUserId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function loadTasks() {
     try {
       const res  = await fetch(`/api/boards/${boardId}/tasks`);

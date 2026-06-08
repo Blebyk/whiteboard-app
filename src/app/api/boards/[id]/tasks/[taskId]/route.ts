@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
+import { publishTaskUpdate } from '@/lib/boardEvents';
 
 function getAccessibleBoard(userId: number, boardId: number) {
   return db.prepare(`
@@ -90,6 +91,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
     WHERE t.id = ?
   `).get(Number(taskId));
 
+  publishTaskUpdate(boardId, user.id);
   return NextResponse.json({ task: updated });
 }
 
@@ -113,5 +115,6 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
     VALUES (?, NULL, ?, ?, 'task_deleted', ?)
   `).run(boardId, user.id, user.name, JSON.stringify({ title: task.title }));
 
+  publishTaskUpdate(boardId, user.id);
   return NextResponse.json({ success: true });
 }

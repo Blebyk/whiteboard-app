@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
+import { publishTaskUpdate } from '@/lib/boardEvents';
 
 function getAccessibleBoard(userId: number, boardId: number) {
   return db.prepare(`
@@ -85,5 +86,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     WHERE t.id = ?
   `).get(result.lastInsertRowid);
 
+  publishTaskUpdate(boardId, user.id);
   return NextResponse.json({ task }, { status: 201 });
 }

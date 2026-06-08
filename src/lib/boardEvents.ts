@@ -9,11 +9,21 @@ export interface BoardEvent {
   by: number | null; // userId, вызвавший изменение (клиенты пропускают свои)
 }
 
-type Listener = (e: BoardEvent) => void;
+export interface TaskEvent {
+  by: number; // userId, вызвавший изменение задачи
+}
 
-const g = globalThis as unknown as { __boardSubs?: Map<number, Set<Listener>> };
+type Listener = (e: BoardEvent) => void;
+type TaskListener = (e: TaskEvent) => void;
+
+const g = globalThis as unknown as {
+  __boardSubs?: Map<number, Set<Listener>>;
+  __taskSubs?: Map<number, Set<TaskListener>>;
+};
 if (!g.__boardSubs) g.__boardSubs = new Map();
-const subs = g.__boardSubs;
+if (!g.__taskSubs)  g.__taskSubs  = new Map();
+const subs     = g.__boardSubs;
+const taskSubs = g.__taskSubs;
 
 export function subscribe(boardId: number, fn: Listener): () => void {
   let set = subs.get(boardId);
@@ -31,4 +41,22 @@ export function publish(boardId: number, e: BoardEvent): void {
   const set = subs.get(boardId);
   if (!set) return;
   for (const fn of set) { try { fn(e); } catch { /* игнорируем сбойный слушатель */ } }
+}
+
+export function subscribeTaskUpdates(boardId: number, fn: TaskListener): () => void {
+  let set = taskSubs.get(boardId);
+  if (!set) { set = new Set(); taskSubs.set(boardId, set); }
+  set.add(fn);
+  return () => {
+    const s = taskSubs.get(boardId);
+    if (!s) return;
+    s.delete(fn);
+    if (s.size === 0) taskSubs.delete(boardId);
+  };
+}
+
+export function publishTaskUpdate(boardId: number, by: number): void {
+  const set = taskSubs.get(boardId);
+  if (!set) return;
+  for (const fn of set) { try { fn({ by }); } catch { /* игнорируем сбойный слушатель */ } }
 }

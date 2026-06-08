@@ -257,6 +257,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
 
     const sync = () => {
       if (!canvas.viewportTransform) return;
+      if (draggingRef.current) return;
       const [zoom, , , , ox, oy] = canvas.viewportTransform as number[];
 
       // Округляем пан до 1 знака, зум до 4 значащих —

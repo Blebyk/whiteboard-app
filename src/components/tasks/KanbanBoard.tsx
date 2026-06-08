@@ -69,6 +69,7 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
   >(null);
   const [activity, setActivity]         = useState<ActivityLog[]>([]);
   const [showActivity, setShowActivity] = useState(false);
+  const [activeTab, setActiveTab]       = useState<Task['status']>('todo');
 
   // Touch drag state stored in a ref (not React state) for use in non-passive event handlers
   const touchDrag = useRef<{
@@ -328,11 +329,181 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
 
       <div style={{ display: 'flex', height: 'calc(100dvh - 52px)' }}>
         {/* ── Columns ── */}
-        <main style={{ flex: 1, padding: isMobile ? '16px 12px' : '24px', overflow: 'auto' }}>
+        <main style={{ flex: 1, padding: isMobile ? '0' : '24px', overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
           {loading ? (
             <div style={{ textAlign: 'center', padding: '80px', color: '#9ca3af' }}>Загрузка...</div>
+          ) : isMobile ? (
+            /* ── Mobile: tab-based single-column view ── */
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              {/* Tab bar */}
+              <div style={{ display: 'flex', backgroundColor: 'white', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
+                {COLUMNS.map((col) => {
+                  const count = tasks.filter((t) => t.status === col.id).length;
+                  const isActive = activeTab === col.id;
+                  return (
+                    <button
+                      key={col.id}
+                      onClick={() => setActiveTab(col.id)}
+                      style={{
+                        flex: 1, padding: '12px 4px 10px',
+                        border: 'none', background: 'none',
+                        cursor: 'pointer', fontFamily: 'inherit',
+                        borderBottom: isActive ? `2.5px solid ${col.color}` : '2.5px solid transparent',
+                        color: isActive ? col.color : '#6b7280',
+                        fontSize: '12px', fontWeight: isActive ? 700 : 500,
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px',
+                        WebkitTapHighlightColor: 'transparent',
+                        transition: 'color 0.15s',
+                      }}
+                    >
+                      <span>{col.label}</span>
+                      <span style={{
+                        fontSize: '11px', fontWeight: 700,
+                        backgroundColor: isActive ? col.color : '#e5e7eb',
+                        color: isActive ? 'white' : '#9ca3af',
+                        borderRadius: '10px', padding: '1px 7px', minWidth: '20px', textAlign: 'center',
+                      }}>{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Active column */}
+              {COLUMNS.filter((col) => col.id === activeTab).map((col) => {
+                const colTasks = tasks.filter((t) => t.status === col.id);
+                return (
+                  <div
+                    key={col.id}
+                    data-column-id={col.id}
+                    style={{ flex: 1, overflowY: 'auto', padding: '16px 12px' }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+                      {canEdit && (
+                        <button
+                          onClick={() => setModal({ mode: 'create', status: col.id })}
+                          style={{
+                            padding: '8px 16px', border: 'none', borderRadius: '8px',
+                            background: col.color, color: 'white', cursor: 'pointer',
+                            fontSize: '13px', fontWeight: 700, fontFamily: 'inherit',
+                            WebkitTapHighlightColor: 'transparent',
+                          }}
+                        >+ Добавить задачу</button>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {colTasks.map((task) => (
+                        <div
+                          key={task.id}
+                          data-task-id={String(task.id)}
+                          onClick={() => setModal({ mode: 'edit', task })}
+                          style={{
+                            backgroundColor: 'white', borderRadius: '10px',
+                            padding: '12px 14px', cursor: 'pointer',
+                            boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
+                            border: '2px solid transparent',
+                            overflow: 'hidden', minWidth: 0,
+                            WebkitTapHighlightColor: 'transparent',
+                            userSelect: 'none',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '7px' }}>
+                            <span style={{
+                              fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px',
+                              backgroundColor: PRIORITY[task.priority]?.bg,
+                              color: PRIORITY[task.priority]?.text,
+                            }}>
+                              {PRIORITY[task.priority]?.label}
+                            </span>
+                            {canEdit && (
+                              <button
+                                onClick={(e) => handleDelete(task.id, e)}
+                                style={{
+                                  border: 'none', background: 'none', cursor: 'pointer',
+                                  fontSize: '18px', color: '#d1d5db', padding: '0', lineHeight: 1,
+                                  WebkitTapHighlightColor: 'transparent',
+                                }}
+                                title="Удалить"
+                              >×</button>
+                            )}
+                          </div>
+                          <p style={{
+                            margin: '0 0 6px', fontSize: '14px', fontWeight: 600,
+                            color: '#1a1a2e', lineHeight: 1.4,
+                            overflowWrap: 'break-word', wordBreak: 'break-word',
+                          }}>
+                            {task.title}
+                          </p>
+                          {task.description && (
+                            <p style={{
+                              margin: '0 0 8px', fontSize: '12px', color: '#6b7280',
+                              lineHeight: 1.4, overflow: 'hidden', maxHeight: '36px',
+                              overflowWrap: 'break-word', wordBreak: 'break-word',
+                            }}>
+                              {task.description}
+                            </p>
+                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
+                            {task.due_date ? (
+                              <span style={{
+                                fontSize: '11px',
+                                color: isOverdue(task) ? '#dc2626' : '#6b7280',
+                                fontWeight: isOverdue(task) ? 700 : 400,
+                              }}>
+                                {isOverdue(task) ? '⚠ ' : ''}{fmt(task.due_date)}
+                              </span>
+                            ) : <span />}
+                            {task.assignee_name && (
+                              <span title={task.assignee_name} style={{
+                                width: '24px', height: '24px', borderRadius: '50%',
+                                backgroundColor: '#4f46e5', color: 'white',
+                                fontSize: '10px', fontWeight: 700,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              }}>
+                                {task.assignee_name.charAt(0).toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                          {/* Mobile: quick move-to-column buttons */}
+                          {canEdit && (
+                            <div style={{ display: 'flex', gap: '5px', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #f3f4f6' }}>
+                              {COLUMNS.filter(c => c.id !== task.status).map(c => (
+                                <button
+                                  key={c.id}
+                                  onClick={(e) => { e.stopPropagation(); handleMoveTask(task.id, c.id); }}
+                                  style={{
+                                    flex: 1, padding: '5px 4px',
+                                    fontSize: '10px', fontWeight: 600,
+                                    border: `1px solid ${c.color}30`,
+                                    borderRadius: '6px',
+                                    background: `${c.color}10`,
+                                    color: c.color,
+                                    cursor: 'pointer', lineHeight: 1.3,
+                                    WebkitTapHighlightColor: 'transparent',
+                                  }}
+                                >
+                                  → {c.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {colTasks.length === 0 && (
+                        <div style={{
+                          textAlign: 'center', padding: '48px 24px', color: '#9ca3af',
+                          fontSize: '13px', border: '1.5px dashed #e5e7eb', borderRadius: '8px',
+                        }}>
+                          Нет задач
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           ) : (
-            <div style={{ display: 'flex', gap: isMobile ? '12px' : '20px', alignItems: 'flex-start' }}>
+            /* ── Desktop: horizontal flex layout ── */
+            <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
               {COLUMNS.map((col) => {
                 const colTasks = tasks.filter((t) => t.status === col.id);
                 return (
@@ -347,9 +518,7 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
                         (e.currentTarget as HTMLElement).style.borderColor = 'transparent';
                     }}
                     style={{
-                      flex: isMobile ? '0 0 min(82vw, 300px)' : '0 0 290px',
-                      width: isMobile ? 'min(82vw, 300px)' : '290px',
-                      maxWidth: isMobile ? 'min(82vw, 300px)' : '290px',
+                      flex: '0 0 290px', width: '290px', maxWidth: '290px',
                       backgroundColor: '#eef0f5',
                       overflow: 'hidden',
                       borderRadius: '14px', padding: '16px',
@@ -474,29 +643,6 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
                             )}
                           </div>
 
-                          {/* Mobile: quick move-to-column buttons */}
-                          {isMobile && canEdit && (
-                            <div style={{ display: 'flex', gap: '5px', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #f3f4f6' }}>
-                              {COLUMNS.filter(c => c.id !== task.status).map(c => (
-                                <button
-                                  key={c.id}
-                                  onClick={(e) => { e.stopPropagation(); handleMoveTask(task.id, c.id); }}
-                                  style={{
-                                    flex: 1, padding: '5px 4px',
-                                    fontSize: '10px', fontWeight: 600,
-                                    border: `1px solid ${c.color}30`,
-                                    borderRadius: '6px',
-                                    background: `${c.color}10`,
-                                    color: c.color,
-                                    cursor: 'pointer', lineHeight: 1.3,
-                                    WebkitTapHighlightColor: 'transparent',
-                                  }}
-                                >
-                                  → {c.label}
-                                </button>
-                              ))}
-                            </div>
-                          )}
                         </div>
                       ))}
 
@@ -505,7 +651,7 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
                           textAlign: 'center', padding: '24px', color: '#9ca3af',
                           fontSize: '13px', border: '1.5px dashed #e5e7eb', borderRadius: '8px',
                         }}>
-                          {isMobile ? 'Нет задач' : 'Перетащите задачу сюда'}
+                          Перетащите задачу сюда
                         </div>
                       )}
                     </div>
@@ -551,7 +697,7 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
                       <strong>{log.userName}</strong> {actionLabel(log.action, log.details)}
                     </p>
                     <p style={{ margin: 0, fontSize: '11px', color: '#9ca3af' }}>
-                      {new Date(log.created_at).toLocaleString('ru-RU')}
+                      {new Date(log.created_at).toLocaleString('ru-RU', { timeZone: 'Asia/Almaty' })}
                     </p>
                   </div>
                 ))}

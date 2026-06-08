@@ -116,7 +116,9 @@ export default function PropertiesPanel({
   const showStickerPalette = tool === 'sticker' || isStickerSelected;
   const showFill = (SHOW_FILL_TOOLS.includes(tool) || hasSelection) && !showStickerPalette;
   const showFont = SHOW_FONT_TOOLS.includes(tool);
-  const showStroke = tool !== 'image' && tool !== 'pan' && tool !== 'select' && tool !== 'sticker' && !isStickerSelected;
+  const showStroke = !isStickerSelected && (
+    (tool !== 'image' && tool !== 'pan' && tool !== 'select' && tool !== 'sticker') || hasSelection
+  );
 
   const panelStyle: React.CSSProperties = mobile ? {
     position: 'fixed', left: 0, right: 0, bottom: 0,

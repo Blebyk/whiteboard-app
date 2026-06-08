@@ -289,7 +289,7 @@ export default function TaskModal({
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '3px' }}>
                       <span style={{ fontSize: '13px', fontWeight: 700, color: '#374151' }}>{c.user_name}</span>
                       <span style={{ fontSize: '11px', color: '#9ca3af' }}>
-                        {new Date(c.created_at).toLocaleString('ru-RU')}
+                        {new Date(c.created_at).toLocaleString('ru-RU', { timeZone: 'Asia/Almaty' })}
                       </span>
                     </div>
                     <p style={{ margin: 0, fontSize: '13px', color: '#4b5563', lineHeight: 1.5 }}>{c.content}</p>

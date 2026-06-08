@@ -221,7 +221,7 @@ export default function AnalyticsDashboard({ boardId, boardName, isOwner, canEdi
                       <strong>{log.userName}</strong> {actionLabel(log.action, log.details)}
                     </p>
                     <p style={{ margin: 0, fontSize: '11px', color: '#9ca3af' }}>
-                      {new Date(log.created_at).toLocaleString('ru-RU')}
+                      {new Date(log.created_at).toLocaleString('ru-RU', { timeZone: 'Asia/Almaty' })}
                     </p>
                   </div>
                 </div>

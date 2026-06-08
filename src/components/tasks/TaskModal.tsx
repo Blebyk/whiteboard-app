@@ -133,19 +133,19 @@ export default function TaskModal({
         maxWidth: isMobile ? '100%' : '580px',
         maxHeight: isMobile ? '92dvh' : '90vh',
         overflow: 'auto',
-        padding: isMobile ? '0 20px calc(env(safe-area-inset-bottom, 0px) + 24px)' : 'clamp(20px, 4vw, 28px)',
+        padding: isMobile ? '0 16px calc(env(safe-area-inset-bottom, 0px) + 16px)' : 'clamp(20px, 4vw, 28px)',
         boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
       }}>
         {/* Drag handle (mobile only) */}
         {isMobile && (
-          <div style={{ position: 'sticky', top: 0, backgroundColor: 'white', paddingTop: '12px', paddingBottom: '4px', zIndex: 1 }}>
-            <div style={{ width: '40px', height: '4px', backgroundColor: '#e5e7eb', borderRadius: '2px', margin: '0 auto' }} />
+          <div style={{ position: 'sticky', top: 0, backgroundColor: 'white', paddingTop: '10px', paddingBottom: '4px', zIndex: 1 }}>
+            <div style={{ width: '36px', height: '4px', backgroundColor: '#e5e7eb', borderRadius: '2px', margin: '0 auto' }} />
           </div>
         )}
 
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px', marginTop: isMobile ? '14px' : 0 }}>
-          <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1a1a2e' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isMobile ? '12px' : '22px', marginTop: isMobile ? '8px' : 0 }}>
+          <h2 style={{ margin: 0, fontSize: isMobile ? '16px' : '18px', fontWeight: 800, color: '#1a1a2e' }}>
             {mode === 'create' ? 'Новая задача' : 'Задача'}
           </h2>
           <button
@@ -155,7 +155,7 @@ export default function TaskModal({
         </div>
 
         {/* Fields */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? '10px' : '16px' }}>
           <div>
             <label style={labelStyle}>Название *</label>
             <input
@@ -164,7 +164,7 @@ export default function TaskModal({
               onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
               disabled={!canEdit}
               placeholder="Что нужно сделать?"
-              style={inputStyle(canEdit)}
+              style={inputStyle(canEdit, isMobile)}
               autoFocus={!isMobile}
             />
           </div>
@@ -176,20 +176,20 @@ export default function TaskModal({
               onChange={(e) => setDescription(e.target.value)}
               disabled={!canEdit}
               placeholder="Подробности задачи..."
-              rows={3}
-              style={{ ...inputStyle(canEdit), resize: 'vertical', minHeight: '76px' }}
+              rows={isMobile ? 2 : 3}
+              style={{ ...inputStyle(canEdit, isMobile), resize: 'vertical', minHeight: isMobile ? '56px' : '76px' }}
             />
           </div>
 
-          {/* Status / Priority — 2 cols on desktop, 1 col on mobile */}
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
+          {/* Status / Priority — always 2 cols */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             <div>
               <label style={labelStyle}>Статус</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as Task['status'])}
                 disabled={!canEdit}
-                style={inputStyle(canEdit)}
+                style={inputStyle(canEdit, isMobile)}
               >
                 <option value="todo">К выполнению</option>
                 <option value="inprogress">В работе</option>
@@ -202,7 +202,7 @@ export default function TaskModal({
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as Task['priority'])}
                 disabled={!canEdit}
-                style={inputStyle(canEdit)}
+                style={inputStyle(canEdit, isMobile)}
               >
                 <option value="low">Низкий</option>
                 <option value="medium">Средний</option>
@@ -211,15 +211,15 @@ export default function TaskModal({
             </div>
           </div>
 
-          {/* Assignee / Due date — 2 cols on desktop, 1 col on mobile */}
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
+          {/* Assignee / Due date — always 2 cols */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             <div>
               <label style={labelStyle}>Исполнитель</label>
               <select
                 value={assigneeId}
                 onChange={(e) => setAssigneeId(e.target.value ? Number(e.target.value) : '')}
                 disabled={!canEdit}
-                style={inputStyle(canEdit)}
+                style={inputStyle(canEdit, isMobile)}
               >
                 <option value="">Не назначен</option>
                 {members.map((m) => (
@@ -241,17 +241,17 @@ export default function TaskModal({
             <div style={{
               display: 'flex',
               flexDirection: isMobile ? 'column-reverse' : 'row',
-              gap: '10px',
+              gap: '8px',
               justifyContent: isMobile ? 'stretch' : 'flex-end',
-              paddingTop: '4px',
+              paddingTop: isMobile ? '2px' : '4px',
             }}>
               <button
                 onClick={onClose}
                 style={{
-                  padding: isMobile ? '13px 20px' : '10px 20px',
+                  padding: isMobile ? '10px 16px' : '10px 20px',
                   border: '1.5px solid #e5e7eb', borderRadius: '8px',
                   background: 'white', cursor: 'pointer',
-                  fontSize: isMobile ? '15px' : '14px', color: '#555',
+                  fontSize: '14px', color: '#555',
                   WebkitTapHighlightColor: 'transparent',
                 }}
               >Отмена</button>
@@ -259,10 +259,10 @@ export default function TaskModal({
                 onClick={handleSave}
                 disabled={saving || !title.trim()}
                 style={{
-                  padding: isMobile ? '13px 24px' : '10px 24px',
+                  padding: isMobile ? '10px 20px' : '10px 24px',
                   backgroundColor: '#4f46e5', color: 'white',
                   border: 'none', borderRadius: '8px',
-                  fontSize: isMobile ? '15px' : '14px', fontWeight: 700,
+                  fontSize: '14px', fontWeight: 700,
                   cursor: saving || !title.trim() ? 'not-allowed' : 'pointer',
                   opacity: saving || !title.trim() ? 0.7 : 1,
                   WebkitTapHighlightColor: 'transparent',
@@ -289,7 +289,7 @@ export default function TaskModal({
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '3px' }}>
                       <span style={{ fontSize: '13px', fontWeight: 700, color: '#374151' }}>{c.user_name}</span>
                       <span style={{ fontSize: '11px', color: '#9ca3af' }}>
-                        {new Date(c.created_at).toLocaleString('ru-RU', { timeZone: 'Asia/Almaty' })}
+                        {new Date(c.created_at.replace(' ', 'T') + (c.created_at.endsWith('Z') ? '' : 'Z')).toLocaleString('ru-RU', { timeZone: 'Asia/Almaty' })}
                       </span>
                     </div>
                     <p style={{ margin: 0, fontSize: '13px', color: '#4b5563', lineHeight: 1.5 }}>{c.content}</p>
@@ -307,7 +307,7 @@ export default function TaskModal({
                     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleComment(); }
                   }}
                   placeholder="Написать комментарий..."
-                  style={{ ...inputStyle(true), flex: 1 }}
+                  style={{ ...inputStyle(true, isMobile), flex: 1 }}
                 />
                 <button
                   onClick={handleComment}
@@ -336,9 +336,9 @@ const labelStyle: React.CSSProperties = {
   marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.06em',
 };
 
-function inputStyle(enabled: boolean): React.CSSProperties {
+function inputStyle(enabled: boolean, compact = false): React.CSSProperties {
   return {
-    width: '100%', padding: '10px 12px', border: '1.5px solid #e5e7eb',
+    width: '100%', padding: compact ? '8px 10px' : '10px 12px', border: '1.5px solid #e5e7eb',
     borderRadius: '8px', fontSize: '14px', outline: 'none', color: '#1a1a2e',
     backgroundColor: enabled ? 'white' : '#f9fafb', boxSizing: 'border-box',
     fontFamily: 'inherit',

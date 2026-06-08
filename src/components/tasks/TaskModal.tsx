@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import DatePicker from './DatePicker';
+import { useIsMobile } from '@/lib/useIsMobile';
 
 export interface Task {
   id: number;
@@ -48,6 +49,7 @@ interface Props {
 export default function TaskModal({
   boardId, mode, initialStatus, task, members, canEdit, onSave, onClose,
 }: Props) {
+  const isMobile = useIsMobile();
   const [title, setTitle] = useState(task?.title ?? '');
   const [description, setDescription] = useState(task?.description ?? '');
   const [status, setStatus] = useState<Task['status']>((task?.status ?? initialStatus) as Task['status']);
@@ -116,25 +118,39 @@ export default function TaskModal({
     <div
       style={{
         position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        zIndex: 1000, padding: '16px',
+        display: 'flex',
+        alignItems: isMobile ? 'flex-end' : 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: isMobile ? 0 : '16px',
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div style={{
-        backgroundColor: 'white', borderRadius: '16px',
-        width: '100%', maxWidth: '580px', maxHeight: '90vh',
-        overflow: 'auto', padding: 'clamp(20px, 4vw, 28px)',
+        backgroundColor: 'white',
+        borderRadius: isMobile ? '20px 20px 0 0' : '16px',
+        width: '100%',
+        maxWidth: isMobile ? '100%' : '580px',
+        maxHeight: isMobile ? '92dvh' : '90vh',
+        overflow: 'auto',
+        padding: isMobile ? '0 20px calc(env(safe-area-inset-bottom, 0px) + 24px)' : 'clamp(20px, 4vw, 28px)',
         boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
       }}>
+        {/* Drag handle (mobile only) */}
+        {isMobile && (
+          <div style={{ position: 'sticky', top: 0, backgroundColor: 'white', paddingTop: '12px', paddingBottom: '4px', zIndex: 1 }}>
+            <div style={{ width: '40px', height: '4px', backgroundColor: '#e5e7eb', borderRadius: '2px', margin: '0 auto' }} />
+          </div>
+        )}
+
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px', marginTop: isMobile ? '14px' : 0 }}>
           <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1a1a2e' }}>
             {mode === 'create' ? 'Новая задача' : 'Задача'}
           </h2>
           <button
             onClick={onClose}
-            style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '24px', color: '#9ca3af', lineHeight: 1 }}
+            style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '24px', color: '#9ca3af', lineHeight: 1, WebkitTapHighlightColor: 'transparent' }}
           >×</button>
         </div>
 
@@ -149,7 +165,7 @@ export default function TaskModal({
               disabled={!canEdit}
               placeholder="Что нужно сделать?"
               style={inputStyle(canEdit)}
-              autoFocus
+              autoFocus={!isMobile}
             />
           </div>
 
@@ -165,7 +181,8 @@ export default function TaskModal({
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          {/* Status / Priority — 2 cols on desktop, 1 col on mobile */}
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
             <div>
               <label style={labelStyle}>Статус</label>
               <select
@@ -194,7 +211,8 @@ export default function TaskModal({
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          {/* Assignee / Due date — 2 cols on desktop, 1 col on mobile */}
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
             <div>
               <label style={labelStyle}>Исполнитель</label>
               <select
@@ -220,22 +238,34 @@ export default function TaskModal({
           </div>
 
           {canEdit && (
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', paddingTop: '4px' }}>
+            <div style={{
+              display: 'flex',
+              flexDirection: isMobile ? 'column-reverse' : 'row',
+              gap: '10px',
+              justifyContent: isMobile ? 'stretch' : 'flex-end',
+              paddingTop: '4px',
+            }}>
               <button
                 onClick={onClose}
                 style={{
-                  padding: '10px 20px', border: '1.5px solid #e5e7eb', borderRadius: '8px',
-                  background: 'white', cursor: 'pointer', fontSize: '14px', color: '#555',
+                  padding: isMobile ? '13px 20px' : '10px 20px',
+                  border: '1.5px solid #e5e7eb', borderRadius: '8px',
+                  background: 'white', cursor: 'pointer',
+                  fontSize: isMobile ? '15px' : '14px', color: '#555',
+                  WebkitTapHighlightColor: 'transparent',
                 }}
               >Отмена</button>
               <button
                 onClick={handleSave}
                 disabled={saving || !title.trim()}
                 style={{
-                  padding: '10px 24px', backgroundColor: '#4f46e5', color: 'white',
-                  border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 700,
+                  padding: isMobile ? '13px 24px' : '10px 24px',
+                  backgroundColor: '#4f46e5', color: 'white',
+                  border: 'none', borderRadius: '8px',
+                  fontSize: isMobile ? '15px' : '14px', fontWeight: 700,
                   cursor: saving || !title.trim() ? 'not-allowed' : 'pointer',
                   opacity: saving || !title.trim() ? 0.7 : 1,
+                  WebkitTapHighlightColor: 'transparent',
                 }}
               >{saving ? 'Сохранение...' : mode === 'create' ? 'Создать' : 'Сохранить'}</button>
             </div>
@@ -283,10 +313,13 @@ export default function TaskModal({
                   onClick={handleComment}
                   disabled={sendingComment || !commentText.trim()}
                   style={{
-                    padding: '10px 16px', backgroundColor: '#4f46e5', color: 'white',
-                    border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700,
+                    padding: isMobile ? '10px 14px' : '10px 16px',
+                    backgroundColor: '#4f46e5', color: 'white',
+                    border: 'none', borderRadius: '8px',
+                    fontSize: '13px', fontWeight: 700,
                     cursor: sendingComment || !commentText.trim() ? 'not-allowed' : 'pointer',
                     opacity: sendingComment || !commentText.trim() ? 0.7 : 1, flexShrink: 0,
+                    WebkitTapHighlightColor: 'transparent',
                   }}
                 >{sendingComment ? '...' : 'Отправить'}</button>
               </div>

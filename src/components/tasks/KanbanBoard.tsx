@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import TaskModal, { type Task } from './TaskModal';
 import BoardHeader from '../shared/BoardHeader';
 import type { PresenceUser } from '@/lib/boardPresence';
@@ -58,35 +58,184 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
   const isMobile = useIsMobile();
   const [tasks, setTasks]       = useState<Task[]>([]);
   const [members, setMembers]   = useState<Member[]>([]);
-  const [presence, setPresence] = useState<PresenceUser[]>([]); // кто сейчас на доске
+  const [presence, setPresence] = useState<PresenceUser[]>([]);
 
-  const [loading, setLoading]   = useState(true);
+  const [loading, setLoading]     = useState(true);
   const [draggedId, setDraggedId] = useState<number | null>(null);
   const [modal, setModal] = useState<
     | { mode: 'create'; status: Task['status'] }
     | { mode: 'edit';   task: Task }
     | null
   >(null);
-  const [activity, setActivity]     = useState<ActivityLog[]>([]);
+  const [activity, setActivity]         = useState<ActivityLog[]>([]);
   const [showActivity, setShowActivity] = useState(false);
+
+  // Touch drag state stored in a ref (not React state) for use in non-passive event handlers
+  const touchDrag = useRef<{
+    taskId: number | null;
+    cardEl: HTMLElement | null;
+    ghost: HTMLElement | null;
+    startX: number;
+    startY: number;
+    offsetX: number;
+    offsetY: number;
+    started: boolean;
+    targetColId: Task['status'] | null;
+  }>({
+    taskId: null, cardEl: null, ghost: null,
+    startX: 0, startY: 0, offsetX: 0, offsetY: 0,
+    started: false, targetColId: null,
+  });
 
   useEffect(() => { loadTasks(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Real-time синхронизация: подписываемся на SSE-поток доски и перезагружаем
-  // задачи, когда другой пользователь создаёт / обновляет / удаляет задачу.
   useEffect(() => {
     const es = new EventSource(`/api/boards/${boardId}/events`);
     es.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data);
         if (msg.type === 'presence') setPresence(msg.users ?? []);
-        if (msg.type === 'task_update' && msg.by !== currentUserId) {
-          loadTasks();
-        }
-      } catch { /* игнорируем невалидный фрейм */ }
+        if (msg.type === 'task_update' && msg.by !== currentUserId) loadTasks();
+      } catch { /* ignore invalid frame */ }
     };
     return () => es.close();
   }, [boardId, currentUserId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Touch drag-and-drop (mobile only)
+  useEffect(() => {
+    if (!isMobile || !canEdit) return;
+
+    function onTouchStart(e: TouchEvent) {
+      const card = (e.target as HTMLElement).closest('[data-task-id]') as HTMLElement | null;
+      if (!card) return;
+      // Don't initiate if tapping action buttons (delete/move)
+      if ((e.target as HTMLElement).closest('button')) return;
+
+      const touch = e.touches[0];
+      const state = touchDrag.current;
+      state.taskId   = parseInt(card.getAttribute('data-task-id')!);
+      state.cardEl   = card;
+      state.startX   = touch.clientX;
+      state.startY   = touch.clientY;
+      state.started  = false;
+      state.ghost    = null;
+      state.targetColId = null;
+
+      document.addEventListener('touchmove', onTouchMove, { passive: false });
+      document.addEventListener('touchend', onTouchEnd);
+    }
+
+    function onTouchMove(e: TouchEvent) {
+      const state = touchDrag.current;
+      if (!state.cardEl || state.taskId === null) return;
+
+      const touch  = e.touches[0];
+      const dx     = touch.clientX - state.startX;
+      const dy     = touch.clientY - state.startY;
+      const dist   = Math.sqrt(dx * dx + dy * dy);
+
+      if (!state.started) {
+        if (dist < 10) return; // haven't moved enough yet
+        state.started = true;
+
+        const rect = state.cardEl.getBoundingClientRect();
+        state.offsetX = state.startX - rect.left;
+        state.offsetY = state.startY - rect.top;
+
+        // Build ghost clone
+        const ghost = state.cardEl.cloneNode(true) as HTMLElement;
+        ghost.setAttribute('style', [
+          `position:fixed`,
+          `left:${rect.left}px`,
+          `top:${rect.top}px`,
+          `width:${rect.width}px`,
+          `opacity:0.9`,
+          `pointer-events:none`,
+          `z-index:9999`,
+          `transform:scale(1.04) rotate(1.5deg)`,
+          `box-shadow:0 12px 32px rgba(0,0,0,0.22)`,
+          `border-radius:10px`,
+          `transition:none`,
+        ].join(';'));
+        document.body.appendChild(ghost);
+        state.ghost = ghost;
+        state.cardEl.style.opacity = '0.3';
+        setDraggedId(state.taskId);
+      }
+
+      e.preventDefault(); // prevent scroll while dragging
+
+      const state2 = touchDrag.current;
+      if (state2.ghost) {
+        state2.ghost.style.left = (touch.clientX - state2.offsetX) + 'px';
+        state2.ghost.style.top  = (touch.clientY - state2.offsetY) + 'px';
+      }
+
+      // Detect column under finger
+      if (state2.ghost) state2.ghost.style.display = 'none';
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      if (state2.ghost) state2.ghost.style.display = '';
+
+      const colEl     = el?.closest('[data-column-id]') as HTMLElement | null;
+      const newColId  = (colEl?.getAttribute('data-column-id') ?? null) as Task['status'] | null;
+
+      if (state2.targetColId !== newColId) {
+        // Clear old highlight
+        if (state2.targetColId) {
+          const prev = document.querySelector(`[data-column-id="${state2.targetColId}"]`) as HTMLElement | null;
+          if (prev) prev.style.borderColor = 'transparent';
+        }
+        state2.targetColId = newColId;
+        if (newColId && colEl) {
+          const col = COLUMNS.find(c => c.id === newColId);
+          if (col) colEl.style.borderColor = col.color;
+        }
+      }
+    }
+
+    function onTouchEnd() {
+      const state = touchDrag.current;
+
+      if (state.ghost) { document.body.removeChild(state.ghost); state.ghost = null; }
+      if (state.cardEl) { state.cardEl.style.opacity = ''; state.cardEl = null; }
+
+      document.querySelectorAll('[data-column-id]').forEach(el => {
+        (el as HTMLElement).style.borderColor = 'transparent';
+      });
+
+      if (state.started && state.taskId !== null && state.targetColId) {
+        const taskId    = state.taskId;
+        const targetCol = state.targetColId;
+        fetch(`/api/boards/${boardId}/tasks/${taskId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: targetCol }),
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (data.task) setTasks(prev => prev.map(t => t.id === taskId ? data.task : t));
+          })
+          .catch(console.error);
+      }
+
+      touchDrag.current = {
+        taskId: null, cardEl: null, ghost: null,
+        startX: 0, startY: 0, offsetX: 0, offsetY: 0,
+        started: false, targetColId: null,
+      };
+      setDraggedId(null);
+
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
+    }
+
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [isMobile, canEdit, boardId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadTasks() {
     try {
@@ -117,6 +266,16 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
     setDraggedId(null);
   }
 
+  async function handleMoveTask(taskId: number, status: Task['status']) {
+    const res  = await fetch(`/api/boards/${boardId}/tasks/${taskId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    const data = await res.json();
+    if (data.task) setTasks((prev) => prev.map((t) => t.id === taskId ? data.task : t));
+  }
+
   async function handleDelete(taskId: number, e: React.MouseEvent) {
     e.stopPropagation();
     if (!confirm('Удалить задачу?')) return;
@@ -144,7 +303,7 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f5f6fa', fontFamily: 'Arial, sans-serif' }}>
-      {/* ── Шапка (единая с доской) ── */}
+      {/* ── Header ── */}
       <BoardHeader
         boardId={boardId}
         boardName={boardName}
@@ -179,6 +338,7 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
                 return (
                   <div
                     key={col.id}
+                    data-column-id={col.id}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={() => handleDrop(col.id)}
                     onDragEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = col.color; }}
@@ -190,7 +350,8 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
                       flex: isMobile ? '0 0 min(82vw, 300px)' : '0 0 290px',
                       width: isMobile ? 'min(82vw, 300px)' : '290px',
                       maxWidth: isMobile ? 'min(82vw, 300px)' : '290px',
-                      backgroundColor: '#eef0f5', overflow: 'hidden',
+                      backgroundColor: '#eef0f5',
+                      overflow: 'hidden',
                       borderRadius: '14px', padding: '16px',
                       minHeight: '200px', border: '2px dashed transparent',
                       transition: 'border-color 0.2s', boxSizing: 'border-box',
@@ -218,7 +379,7 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
                             width: '28px', height: '28px', borderRadius: '7px', border: 'none',
                             background: 'white', cursor: 'pointer', fontSize: '18px',
                             color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.1)', WebkitTapHighlightColor: 'transparent',
                           }}
                         >+</button>
                       )}
@@ -229,7 +390,8 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
                       {colTasks.map((task) => (
                         <div
                           key={task.id}
-                          draggable={canEdit}
+                          data-task-id={String(task.id)}
+                          draggable={canEdit && !isMobile}
                           onDragStart={() => setDraggedId(task.id)}
                           onDragEnd={() => setDraggedId(null)}
                           onClick={() => setModal({ mode: 'edit', task })}
@@ -241,6 +403,8 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
                             opacity: draggedId === task.id ? 0.5 : 1,
                             transition: 'box-shadow 0.15s',
                             overflow: 'hidden', minWidth: 0,
+                            WebkitTapHighlightColor: 'transparent',
+                            userSelect: 'none',
                           }}
                           onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.boxShadow = '0 4px 14px rgba(0,0,0,0.11)')}
                           onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.boxShadow = '0 1px 4px rgba(0,0,0,0.07)')}
@@ -259,6 +423,7 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
                                 style={{
                                   border: 'none', background: 'none', cursor: 'pointer',
                                   fontSize: '18px', color: '#d1d5db', padding: '0', lineHeight: 1,
+                                  WebkitTapHighlightColor: 'transparent',
                                 }}
                                 title="Удалить"
                               >×</button>
@@ -308,6 +473,30 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
                               </span>
                             )}
                           </div>
+
+                          {/* Mobile: quick move-to-column buttons */}
+                          {isMobile && canEdit && (
+                            <div style={{ display: 'flex', gap: '5px', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #f3f4f6' }}>
+                              {COLUMNS.filter(c => c.id !== task.status).map(c => (
+                                <button
+                                  key={c.id}
+                                  onClick={(e) => { e.stopPropagation(); handleMoveTask(task.id, c.id); }}
+                                  style={{
+                                    flex: 1, padding: '5px 4px',
+                                    fontSize: '10px', fontWeight: 600,
+                                    border: `1px solid ${c.color}30`,
+                                    borderRadius: '6px',
+                                    background: `${c.color}10`,
+                                    color: c.color,
+                                    cursor: 'pointer', lineHeight: 1.3,
+                                    WebkitTapHighlightColor: 'transparent',
+                                  }}
+                                >
+                                  → {c.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       ))}
 
@@ -316,7 +505,7 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
                           textAlign: 'center', padding: '24px', color: '#9ca3af',
                           fontSize: '13px', border: '1.5px dashed #e5e7eb', borderRadius: '8px',
                         }}>
-                          Перетащите задачу сюда
+                          {isMobile ? 'Нет задач' : 'Перетащите задачу сюда'}
                         </div>
                       )}
                     </div>
@@ -327,7 +516,7 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
           )}
         </main>
 
-        {/* ── Activity panel (на телефоне — выезжающая панель поверх) ── */}
+        {/* ── Activity panel (mobile: slide-over) ── */}
         {showActivity && isMobile && (
           <div
             onClick={() => setShowActivity(false)}
@@ -349,7 +538,7 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
               <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#1a1a2e' }}>Активность</h3>
               <button
                 onClick={() => setShowActivity(false)}
-                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '20px', color: '#9ca3af' }}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '20px', color: '#9ca3af', WebkitTapHighlightColor: 'transparent' }}
               >×</button>
             </div>
             {activity.length === 0 ? (
@@ -397,5 +586,6 @@ function headerBtn(active: boolean, compact = false): React.CSSProperties {
     fontSize: '13px', color: active ? '#4f46e5' : '#374151',
     fontWeight: active ? 700 : 400, lineHeight: 1, flexShrink: 0,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
+    WebkitTapHighlightColor: 'transparent',
   };
 }

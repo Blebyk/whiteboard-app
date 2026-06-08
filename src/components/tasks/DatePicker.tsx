@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useIsMobile } from '@/lib/useIsMobile';
 
 interface Props {
   value: string;       // YYYY-MM-DD или ''
@@ -29,7 +30,15 @@ function todayStr(): string {
   return toStr(t.getFullYear(), t.getMonth(), t.getDate());
 }
 
+const navBtn: React.CSSProperties = {
+  width: '32px', height: '32px', border: '1.5px solid #e5e7eb',
+  borderRadius: '8px', background: 'white', cursor: 'pointer',
+  color: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'center',
+  padding: 0,
+};
+
 export default function DatePicker({ value, onChange, disabled }: Props) {
+  const isMobile = useIsMobile();
   const today = todayStr();
 
   const initYear  = value ? parseInt(value.split('-')[0]) : new Date().getFullYear();
@@ -49,20 +58,21 @@ export default function DatePicker({ value, onChange, disabled }: Props) {
     }
   }, [value]);
 
+  // Desktop-only outside-click handler (mobile uses overlay tap)
   useEffect(() => {
+    if (isMobile) return;
     function onClick(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node))
         setOpen(false);
     }
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
-  }, []);
+  }, [isMobile]);
 
   function handleToggle() {
     if (disabled) return;
-    if (!open && triggerRef.current) {
+    if (!open && !isMobile && triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
-      // Высота дропдауна ~320px; если снизу меньше — открываем вверх
       setDropUp(window.innerHeight - rect.bottom < 340);
     }
     setOpen((o) => !o);
@@ -82,10 +92,109 @@ export default function DatePicker({ value, onChange, disabled }: Props) {
     setOpen(false);
   }
 
-  const daysInMonth  = new Date(viewYear, viewMonth + 1, 0).getDate();
-  // offset so Monday = column 0
-  const firstDow     = new Date(viewYear, viewMonth, 1).getDay();
-  const startOffset  = (firstDow + 6) % 7;
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const firstDow    = new Date(viewYear, viewMonth, 1).getDay();
+  const startOffset = (firstDow + 6) % 7;
+
+  function renderCalendar() {
+    return (
+      <>
+        {/* Month / year nav */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+          <button onClick={prevMonth} style={navBtn}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <span style={{ fontSize: isMobile ? '16px' : '14px', fontWeight: 700, color: '#1a1a2e' }}>
+            {MONTHS[viewMonth]} {viewYear}
+          </span>
+          <button onClick={nextMonth} style={navBtn}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Weekday headers */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: '4px' }}>
+          {DAYS.map((d) => (
+            <div key={d} style={{
+              textAlign: 'center', fontSize: isMobile ? '13px' : '11px', fontWeight: 700,
+              color: '#9ca3af', padding: isMobile ? '6px 0' : '3px 0',
+            }}>{d}</div>
+          ))}
+        </div>
+
+        {/* Day cells */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '3px' }}>
+          {Array.from({ length: startOffset }).map((_, i) => <div key={`e${i}`} />)}
+
+          {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
+            const ds         = toStr(viewYear, viewMonth, day);
+            const isSelected = ds === value;
+            const isToday    = ds === today;
+
+            return (
+              <button
+                key={day}
+                onClick={() => selectDay(day)}
+                style={{
+                  width: '100%', aspectRatio: '1',
+                  border: isToday && !isSelected ? '1.5px solid #c7d2fe' : 'none',
+                  borderRadius: '10px',
+                  fontSize: isMobile ? '15px' : '13px',
+                  lineHeight: 1,
+                  cursor: 'pointer',
+                  fontWeight: isSelected || isToday ? 700 : 400,
+                  backgroundColor: isSelected ? '#4f46e5' : 'transparent',
+                  color: isSelected ? 'white' : isToday ? '#4f46e5' : '#374151',
+                  transition: 'background 0.1s',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  minHeight: isMobile ? '42px' : undefined,
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isSelected)
+                    (e.currentTarget as HTMLElement).style.backgroundColor = '#f5f3ff';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isSelected)
+                    (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                }}
+              >
+                {day}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #f3f4f6', display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => { onChange(today); setOpen(false); }}
+            style={{
+              flex: 1, padding: isMobile ? '11px' : '7px', border: '1.5px solid #c7d2fe',
+              borderRadius: '8px', background: '#f5f3ff', cursor: 'pointer',
+              fontSize: isMobile ? '14px' : '12px', fontWeight: 700, color: '#4f46e5',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+          >Сегодня</button>
+          {value && (
+            <button
+              onClick={() => { onChange(''); setOpen(false); }}
+              style={{
+                flex: 1, padding: isMobile ? '11px' : '7px', border: '1.5px solid #e5e7eb',
+                borderRadius: '8px', background: 'white', cursor: 'pointer',
+                fontSize: isMobile ? '14px' : '12px', fontWeight: 600, color: '#6b7280',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            >Очистить</button>
+          )}
+        </div>
+      </>
+    );
+  }
 
   return (
     <div ref={containerRef} style={{ position: 'relative', fontFamily: 'Arial, sans-serif' }}>
@@ -104,6 +213,7 @@ export default function DatePicker({ value, onChange, disabled }: Props) {
           userSelect: 'none',
           boxShadow: open ? '0 0 0 3px #ede9fe' : 'none',
           transition: 'border-color 0.15s, box-shadow 0.15s',
+          WebkitTapHighlightColor: 'transparent',
         }}
       >
         <span>{value ? toDisplay(value) : 'дд / мм / гггг'}</span>
@@ -117,8 +227,8 @@ export default function DatePicker({ value, onChange, disabled }: Props) {
         </svg>
       </div>
 
-      {/* ── Calendar dropdown ── */}
-      {open && !disabled && (
+      {/* ── Desktop: dropdown ── */}
+      {open && !disabled && !isMobile && (
         <div style={{
           position: 'absolute',
           top:    dropUp ? 'auto' : 'calc(100% + 6px)',
@@ -128,106 +238,50 @@ export default function DatePicker({ value, onChange, disabled }: Props) {
           borderRadius: '14px', boxShadow: '0 8px 32px rgba(0,0,0,0.13)',
           padding: '16px', width: '264px',
         }}>
-          {/* Month / year nav */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-            <button onClick={prevMonth} style={navBtn}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-            </button>
-            <span style={{ fontSize: '14px', fontWeight: 700, color: '#1a1a2e' }}>
-              {MONTHS[viewMonth]} {viewYear}
-            </span>
-            <button onClick={nextMonth} style={navBtn}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Weekday headers */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: '4px' }}>
-            {DAYS.map((d) => (
-              <div key={d} style={{
-                textAlign: 'center', fontSize: '11px', fontWeight: 700,
-                color: '#9ca3af', padding: '3px 0',
-              }}>{d}</div>
-            ))}
-          </div>
-
-          {/* Day cells */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
-            {Array.from({ length: startOffset }).map((_, i) => <div key={`e${i}`} />)}
-
-            {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
-              const ds        = toStr(viewYear, viewMonth, day);
-              const isSelected = ds === value;
-              const isToday    = ds === today;
-
-              return (
-                <button
-                  key={day}
-                  onClick={() => selectDay(day)}
-                  style={{
-                    width: '100%', aspectRatio: '1',
-                    border: isToday && !isSelected ? '1.5px solid #c7d2fe' : 'none',
-                    borderRadius: '8px', fontSize: '13px', lineHeight: 1,
-                    cursor: 'pointer',
-                    fontWeight: isSelected || isToday ? 700 : 400,
-                    backgroundColor: isSelected ? '#4f46e5' : 'transparent',
-                    color: isSelected ? 'white' : isToday ? '#4f46e5' : '#374151',
-                    transition: 'background 0.1s',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isSelected)
-                      (e.currentTarget as HTMLElement).style.backgroundColor = '#f5f3ff';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isSelected)
-                      (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-                  }}
-                >
-                  {day}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Footer */}
-          <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #f3f4f6', display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => { onChange(today); setOpen(false); }}
-              style={{
-                flex: 1, padding: '7px', border: '1.5px solid #c7d2fe',
-                borderRadius: '8px', background: '#f5f3ff', cursor: 'pointer',
-                fontSize: '12px', fontWeight: 700, color: '#4f46e5',
-              }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = '#ede9fe')}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = '#f5f3ff')}
-            >Сегодня</button>
-            {value && (
-              <button
-                onClick={() => { onChange(''); setOpen(false); }}
-                style={{
-                  flex: 1, padding: '7px', border: '1.5px solid #e5e7eb',
-                  borderRadius: '8px', background: 'white', cursor: 'pointer',
-                  fontSize: '12px', fontWeight: 600, color: '#6b7280',
-                }}
-                onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = '#f9fafb')}
-                onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = 'white')}
-              >Очистить</button>
-            )}
-          </div>
+          {renderCalendar()}
         </div>
+      )}
+
+      {/* ── Mobile: bottom sheet ── */}
+      {open && !disabled && isMobile && (
+        <>
+          {/* Overlay */}
+          <div
+            onClick={() => setOpen(false)}
+            style={{
+              position: 'fixed', inset: 0,
+              backgroundColor: 'rgba(0,0,0,0.45)',
+              zIndex: 1200,
+            }}
+          />
+          {/* Sheet */}
+          <div style={{
+            position: 'fixed', left: 0, right: 0, bottom: 0,
+            zIndex: 1201,
+            backgroundColor: 'white',
+            borderRadius: '20px 20px 0 0',
+            padding: '12px 24px calc(env(safe-area-inset-bottom, 0px) + 28px)',
+            boxShadow: '0 -4px 32px rgba(0,0,0,0.18)',
+          }}>
+            {/* Drag handle */}
+            <div style={{ width: '40px', height: '4px', backgroundColor: '#e5e7eb', borderRadius: '2px', margin: '0 auto 18px' }} />
+
+            {/* Title + close */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <span style={{ fontSize: '18px', fontWeight: 700, color: '#1a1a2e' }}>Выберите дату</span>
+              <button
+                onClick={() => setOpen(false)}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '26px', color: '#9ca3af', lineHeight: 1, padding: '4px 8px', WebkitTapHighlightColor: 'transparent' }}
+              >×</button>
+            </div>
+
+            {/* Calendar */}
+            <div style={{ maxWidth: '340px', margin: '0 auto' }}>
+              {renderCalendar()}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
 }
-
-const navBtn: React.CSSProperties = {
-  width: '28px', height: '28px', border: '1.5px solid #e5e7eb',
-  borderRadius: '8px', background: 'white', cursor: 'pointer',
-  color: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'center',
-  padding: 0,
-};

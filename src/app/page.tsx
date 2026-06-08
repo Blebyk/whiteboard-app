@@ -181,12 +181,13 @@ function Hero() {
         </p>
         <Link href="/login" style={{ textDecoration: 'none' }}>
           <button style={{
-            padding: '12px 26px',
+            padding: '14px 40px',
             background: BLUE_LEGACY,
             color: '#fff', border: 'none', borderRadius: 8,
-            fontSize: 15, fontWeight: 600,
+            fontSize: 16, fontWeight: 600,
             cursor: 'pointer', fontFamily: 'inherit',
             boxShadow: '0 4px 12px rgba(0, 123, 255, 0.25)',
+            minWidth: 'min(220px, 80vw)',
           }}>Начать работу</button>
         </Link>
       </div>

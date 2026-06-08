@@ -389,8 +389,8 @@ export default function WhiteboardApp({
         {canEdit && selectionInfo && (
           <FloatingToolbar
             info={selectionInfo}
-            onApply={(props) => {
-              canvasRef.current?.applyToSelection(props);
+            onApply={(props, skipHistory) => {
+              canvasRef.current?.applyToSelection(props, skipHistory);
               if (props.stroke !== undefined) setStrokeColor(props.stroke);
               if (props.fill !== undefined) setFillColor(props.fill);
               if (props.strokeWidth !== undefined) setStrokeWidth(props.strokeWidth);

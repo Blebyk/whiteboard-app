@@ -6,7 +6,7 @@ import type { SelectionInfo } from './Canvas';
 
 interface Props {
   info: SelectionInfo;
-  onApply(props: { stroke?: string; fill?: string; strokeWidth?: number; fontSize?: number }): void;
+  onApply(props: { stroke?: string; fill?: string; strokeWidth?: number; fontSize?: number }, skipHistory?: boolean): void;
   onDelete(): void;
 }
 
@@ -170,7 +170,8 @@ export default function FloatingToolbar({ info, onApply, onDelete }: Props) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <input
                 type="range" min={8} max={72} value={fs}
-                onChange={(e) => { const v = Number(e.target.value); setFs(v); onApply({ fontSize: v }); }}
+                onChange={(e) => { const v = Number(e.target.value); setFs(v); onApply({ fontSize: v }, true); }}
+                onPointerUp={(e) => onApply({ fontSize: Number((e.target as HTMLInputElement).value) })}
                 style={{ width: 64, accentColor: '#4f46e5', margin: 0, cursor: 'pointer' }}
               />
               <span style={{ fontSize: 11, color: '#6b7280', minWidth: 18, fontFamily: 'monospace', textAlign: 'right' }}>{fs}</span>

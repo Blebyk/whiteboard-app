@@ -63,7 +63,7 @@ export interface CanvasRef {
   getState(): string;
   loadState(state: string): void;
   addImage(dataUrl: string): void;
-  applyToSelection(props: { stroke?: string; fill?: string; strokeWidth?: number; fontSize?: number }): void;
+  applyToSelection(props: { stroke?: string; fill?: string; strokeWidth?: number; fontSize?: number }, skipHistory?: boolean): void;
   /** true, пока пользователь активно рисует/панорамирует/тащит/редактирует или держит мультивыделение. */
   isBusy(): boolean;
   /** Снимок по объектам (по стабильному id) + мета уровня холста, для диффа.
@@ -1217,7 +1217,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         pushHistory();
       });
     },
-    applyToSelection({ stroke, fill, strokeWidth, fontSize }) {
+    applyToSelection({ stroke, fill, strokeWidth, fontSize }, skipHistory?: boolean) {
       const c = fc.current;
       if (!c) return;
       c.getActiveObjects().forEach((obj: any) => {
@@ -1255,10 +1255,12 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
         }
         if (fontSize !== undefined && (obj.type === 'i-text' || obj.type === 'textbox')) {
           obj.set({ fontSize });
+          obj.initDimensions?.();
+          obj.setCoords();
         }
       });
       c.requestRenderAll();
-      pushHistory();
+      if (!skipHistory) pushHistory();
     },
     isBusy() {
       if (drawing.current || panning.current || midPanning.current || draggingRef.current) return true;

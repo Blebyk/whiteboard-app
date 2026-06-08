@@ -112,10 +112,11 @@ function MarketingHeader() {
   return (
     <header style={{
       backgroundColor: 'transparent',
-      padding: '22px 40px',
+      padding: '20px clamp(16px, 5vw, 40px)',
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
+      gap: 12,
       position: 'relative',
       zIndex: 3,
     }}>
@@ -149,7 +150,7 @@ function Hero() {
   return (
     <section style={{
       position: 'relative',
-      padding: '12px 40px 16px',
+      padding: '12px clamp(16px, 5vw, 40px) 16px',
       textAlign: 'center',
     }}>
       <div style={{
@@ -159,7 +160,7 @@ function Hero() {
         margin: '0 auto',
       }}>
         <h1 style={{
-          fontSize: 52,
+          fontSize: 'clamp(30px, 8vw, 52px)',
           color: INK,
           margin: '0 0 16px',
           fontWeight: 800,
@@ -236,14 +237,14 @@ function Features() {
   return (
     <section style={{
       position: 'relative',
-      padding: '0 40px',
+      padding: '0 clamp(16px, 5vw, 40px)',
       zIndex: 4,
     }}>
       <div style={{
         maxWidth: 1040,
         margin: '0 auto',
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))',
         gap: 22,
       }}>
         <FeatureCard

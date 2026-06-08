@@ -8,6 +8,7 @@ import PropertiesPanel from './PropertiesPanel';
 import FloatingToolbar from './FloatingToolbar';
 import type { Tool, CanvasRef, SelectionInfo } from './Canvas';
 import type { PresenceUser } from '@/lib/boardPresence';
+import { useIsMobile } from '@/lib/useIsMobile';
 
 interface Props {
   boardId: number;
@@ -25,6 +26,8 @@ export default function WhiteboardApp({
   isOwner, canEdit, currentUserId, initialRev,
 }: Props) {
   const canvasRef = useRef<CanvasRef>(null);
+  const isMobile = useIsMobile();
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
 
   const [tool, setTool] = useState<Tool>(canEdit ? 'select' : 'pan');
   const [strokeColor, setStrokeColor] = useState('#1a1a2e');
@@ -313,8 +316,36 @@ export default function WhiteboardApp({
     setTool('select');
   }, []);
 
+  // Общие пропсы панели свойств — переиспользуются десктопной боковой панелью и
+  // мобильным нижним листом, чтобы не дублировать обработчики.
+  const panelProps = {
+    tool,
+    strokeColor,
+    fillColor,
+    strokeWidth,
+    fontSize,
+    bgStyle,
+    hasSelection,
+    isStickerSelected: !!selectionInfo?.isSticker,
+    onStrokeColorChange: (c: string) => {
+      setStrokeColor(c);
+      if (hasSelection) canvasRef.current?.applyToSelection({ stroke: c });
+    },
+    onFillColorChange: (c: string) => {
+      setFillColor(c);
+      if (hasSelection) canvasRef.current?.applyToSelection({ fill: c });
+    },
+    onStrokeWidthChange: (n: number) => {
+      setStrokeWidth(n);
+      if (hasSelection) canvasRef.current?.applyToSelection({ strokeWidth: n });
+    },
+    onFontSizeChange: setFontSize,
+    onBgStyleChange: setBgStyle,
+    onDelete: () => canvasRef.current?.deleteSelected(),
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', fontFamily: 'Arial, sans-serif' }}>
+    <div className="app-viewport" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'Arial, sans-serif' }}>
       <TopBar
         boardId={boardId}
         boardName={name}
@@ -340,7 +371,7 @@ export default function WhiteboardApp({
       />
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {canEdit && (
+        {canEdit && !isMobile && (
           <Toolbar tool={tool} onToolChange={setTool} onImageUpload={handleImageUpload} />
         )}
 
@@ -367,7 +398,9 @@ export default function WhiteboardApp({
           />
 
           <div style={{
-            position: 'absolute', bottom: '16px', right: '16px',
+            position: 'absolute',
+            bottom: (isMobile && canEdit) ? '72px' : '16px',
+            right: '16px',
             display: 'flex', gap: '6px', alignItems: 'center',
             backgroundColor: 'white', borderRadius: '10px',
             border: '1px solid #e5e7eb', padding: '5px 8px',
@@ -386,7 +419,7 @@ export default function WhiteboardApp({
           </div>
         </div>
 
-        {canEdit && selectionInfo && (
+        {canEdit && !isMobile && selectionInfo && (
           <FloatingToolbar
             info={selectionInfo}
             onApply={(props, skipHistory) => {
@@ -400,34 +433,26 @@ export default function WhiteboardApp({
           />
         )}
 
-        {canEdit && (
-          <PropertiesPanel
-            tool={tool}
-            strokeColor={strokeColor}
-            fillColor={fillColor}
-            strokeWidth={strokeWidth}
-            fontSize={fontSize}
-            bgStyle={bgStyle}
-            hasSelection={hasSelection}
-            isStickerSelected={!!selectionInfo?.isSticker}
-            onStrokeColorChange={(c) => {
-              setStrokeColor(c);
-              if (hasSelection) canvasRef.current?.applyToSelection({ stroke: c });
-            }}
-            onFillColorChange={(c) => {
-              setFillColor(c);
-              if (hasSelection) canvasRef.current?.applyToSelection({ fill: c });
-            }}
-            onStrokeWidthChange={(n) => {
-              setStrokeWidth(n);
-              if (hasSelection) canvasRef.current?.applyToSelection({ strokeWidth: n });
-            }}
-            onFontSizeChange={setFontSize}
-            onBgStyleChange={setBgStyle}
-            onDelete={() => canvasRef.current?.deleteSelected()}
-          />
+        {canEdit && !isMobile && (
+          <PropertiesPanel {...panelProps} />
         )}
       </div>
+
+      {/* ── Мобильная нижняя панель инструментов ── */}
+      {canEdit && isMobile && (
+        <Toolbar
+          tool={tool}
+          onToolChange={setTool}
+          onImageUpload={handleImageUpload}
+          horizontal
+          onOpenProperties={() => setMobilePanelOpen(true)}
+        />
+      )}
+
+      {/* ── Мобильная панель свойств (нижний лист) ── */}
+      {canEdit && isMobile && mobilePanelOpen && (
+        <PropertiesPanel {...panelProps} mobile onClose={() => setMobilePanelOpen(false)} />
+      )}
     </div>
   );
 }

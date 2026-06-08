@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import BoardHeader from '../shared/BoardHeader';
+import type { PresenceUser } from '@/lib/boardPresence';
 
 interface AnalyticsData {
   total: number;
@@ -55,9 +56,18 @@ function getLast7Days(): string[] {
   });
 }
 
-export default function AnalyticsDashboard({ boardId }: { boardId: number }) {
+interface Props {
+  boardId: number;
+  boardName: string;
+  isOwner: boolean;
+  canEdit: boolean;
+  currentUserId: number;
+}
+
+export default function AnalyticsDashboard({ boardId, boardName, isOwner, canEdit, currentUserId }: Props) {
   const [data, setData]     = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [presence, setPresence] = useState<PresenceUser[]>([]); // кто сейчас на доске
 
   useEffect(() => {
     fetch(`/api/boards/${boardId}/analytics`)
@@ -66,14 +76,37 @@ export default function AnalyticsDashboard({ boardId }: { boardId: number }) {
       .finally(() => setLoading(false));
   }, [boardId]);
 
-  if (loading) {
+  // Presence через SSE — как на доске и канбане.
+  useEffect(() => {
+    const es = new EventSource(`/api/boards/${boardId}/events`);
+    es.onmessage = (ev) => {
+      try { const msg = JSON.parse(ev.data); if (msg.type === 'presence') setPresence(msg.users ?? []); } catch { /* игнор */ }
+    };
+    return () => es.close();
+  }, [boardId]);
+
+  const header = (
+    <BoardHeader
+      boardId={boardId}
+      boardName={boardName}
+      active="analytics"
+      currentUserId={currentUserId}
+      isOwner={isOwner}
+      canEdit={canEdit}
+      presence={presence}
+    />
+  );
+
+  if (loading || !data) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Arial, sans-serif' }}>
-        <span style={{ color: '#9ca3af' }}>Загрузка аналитики...</span>
+      <div style={{ minHeight: '100vh', backgroundColor: '#f5f6fa', fontFamily: 'Arial, sans-serif' }}>
+        {header}
+        <div style={{ padding: '80px', textAlign: 'center', color: '#9ca3af' }}>
+          {loading ? 'Загрузка аналитики...' : 'Нет данных'}
+        </div>
       </div>
     );
   }
-  if (!data) return null;
 
   const done = data.byStatus.find((s) => s.status === 'done')?.count ?? 0;
   const completionRate = data.total > 0 ? Math.round((done / data.total) * 100) : 0;
@@ -83,33 +116,11 @@ export default function AnalyticsDashboard({ boardId }: { boardId: number }) {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f5f6fa', fontFamily: 'Arial, sans-serif' }}>
-      {/* ── Header ── */}
-      <header style={{
-        backgroundColor: 'white', borderBottom: '1px solid #e5e7eb',
-        padding: '0 24px', height: '56px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Link href="/dashboard" style={navLink}>← Дашборд</Link>
-          <Divider />
-          <Link href={`/board/${boardId}`} style={navLink}>Доска</Link>
-          <Divider />
-          <span style={{ fontSize: '15px', fontWeight: 700, color: '#1a1a2e' }}>{data.boardName}</span>
-          <span style={{
-            fontSize: '11px', fontWeight: 700, color: '#059669',
-            backgroundColor: '#d1fae5', padding: '2px 9px', borderRadius: '20px',
-          }}>АНАЛИТИКА</span>
-        </div>
-        <Link href={`/board/${boardId}/kanban`} style={{
-          padding: '7px 14px', border: '1.5px solid #e5e7eb', borderRadius: '8px',
-          background: 'white', textDecoration: 'none', fontSize: '13px', color: '#555',
-        }}>Канбан</Link>
-      </header>
+      {header}
 
-      <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px 24px' }}>
+      <main style={{ maxWidth: '1100px', margin: '0 auto', padding: 'clamp(20px, 4vw, 32px) clamp(14px, 4vw, 24px)' }}>
         {/* ── Summary cards ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '28px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px', marginBottom: '28px' }}>
           {[
             { label: 'Всего задач',  value: data.total,         color: '#6366f1', bg: '#ede9fe' },
             { label: 'Выполнено',    value: done,               color: '#10b981', bg: '#d1fae5' },
@@ -124,13 +135,13 @@ export default function AnalyticsDashboard({ boardId }: { boardId: number }) {
         </div>
 
         {/* ── Row 1: status + priority ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px', marginBottom: '20px' }}>
           <BarSection title="Задачи по статусу" meta={STATUS_META} data={data.byStatus.map((x) => ({ key: x.status, count: x.count }))} total={data.total} />
           <BarSection title="Задачи по приоритету" meta={PRIORITY_META} data={data.byPriority.map((x) => ({ key: x.priority, count: x.count }))} total={data.total} order={['high', 'medium', 'low']} />
         </div>
 
         {/* ── Row 2: activity + assignee ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px', marginBottom: '20px' }}>
           {/* Bar chart: created per day */}
           <div style={card}>
             <p style={cardTitle}>Создано задач (7 дней)</p>
@@ -262,8 +273,6 @@ function BarSection({
   );
 }
 
-const navLink: React.CSSProperties = { textDecoration: 'none', color: '#6b7280', fontSize: '14px' };
-
 const card: React.CSSProperties = {
   backgroundColor: 'white', borderRadius: '14px', padding: '20px',
   border: '1.5px solid #e5e7eb', boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
@@ -277,7 +286,3 @@ const cardLabel: React.CSSProperties = {
   margin: '0 0 8px', fontSize: '11px', color: '#6b7280', fontWeight: 700,
   textTransform: 'uppercase', letterSpacing: '0.06em',
 };
-
-function Divider() {
-  return <span style={{ color: '#e5e7eb', fontSize: '18px', userSelect: 'none' }}>|</span>;
-}

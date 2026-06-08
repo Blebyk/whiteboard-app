@@ -34,6 +34,7 @@ export default async function KanbanPage({ params }: { params: Promise<{ id: str
       boardName={board.name}
       canEdit={canEdit}
       currentUserId={user.id}
+      isOwner={isOwner}
     />
   );
 }

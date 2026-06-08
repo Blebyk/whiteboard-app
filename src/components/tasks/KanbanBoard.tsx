@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import TaskModal, { type Task } from './TaskModal';
+import BoardHeader from '../shared/BoardHeader';
+import type { PresenceUser } from '@/lib/boardPresence';
+import { useIsMobile } from '@/lib/useIsMobile';
 
 interface Member {
   id: number;
@@ -24,6 +26,7 @@ interface Props {
   boardName: string;
   canEdit: boolean;
   currentUserId: number;
+  isOwner: boolean;
 }
 
 const COLUMNS: { id: Task['status']; label: string; color: string }[] = [
@@ -51,9 +54,12 @@ function actionLabel(action: string, detailsStr: string): string {
   } catch { return action; }
 }
 
-export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId }: Props) {
+export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId, isOwner }: Props) {
+  const isMobile = useIsMobile();
   const [tasks, setTasks]       = useState<Task[]>([]);
   const [members, setMembers]   = useState<Member[]>([]);
+  const [presence, setPresence] = useState<PresenceUser[]>([]); // кто сейчас на доске
+
   const [loading, setLoading]   = useState(true);
   const [draggedId, setDraggedId] = useState<number | null>(null);
   const [modal, setModal] = useState<
@@ -73,6 +79,7 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
     es.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data);
+        if (msg.type === 'presence') setPresence(msg.users ?? []);
         if (msg.type === 'task_update' && msg.by !== currentUserId) {
           loadTasks();
         }
@@ -137,43 +144,36 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f5f6fa', fontFamily: 'Arial, sans-serif' }}>
-      {/* ── Top bar ── */}
-      <header style={{
-        backgroundColor: 'white', borderBottom: '1px solid #e5e7eb',
-        padding: '0 20px', height: '56px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Link href="/dashboard" style={navLink}>← Дашборд</Link>
-          <Divider />
-          <Link href={`/board/${boardId}`} style={navLink}>Доска</Link>
-          <Divider />
-          <span style={{ fontSize: '15px', fontWeight: 700, color: '#1a1a2e' }}>{boardName}</span>
-          <span style={{
-            fontSize: '11px', fontWeight: 700, color: '#4f46e5',
-            backgroundColor: '#ede9fe', padding: '2px 9px', borderRadius: '20px',
-          }}>КАНБАН</span>
-        </div>
+      {/* ── Шапка (единая с доской) ── */}
+      <BoardHeader
+        boardId={boardId}
+        boardName={boardName}
+        active="kanban"
+        currentUserId={currentUserId}
+        isOwner={isOwner}
+        canEdit={canEdit}
+        presence={presence}
+      >
+        <button
+          onClick={() => { const next = !showActivity; setShowActivity(next); if (next) loadActivity(); }}
+          style={headerBtn(showActivity, isMobile)}
+          title="Активность"
+        >
+          {isMobile ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+            </svg>
+          ) : 'Активность'}
+        </button>
+      </BoardHeader>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button
-            onClick={() => { const next = !showActivity; setShowActivity(next); if (next) loadActivity(); }}
-            style={headerBtn(showActivity)}
-          >Активность</button>
-          <Link href={`/board/${boardId}/analytics`} style={{ ...headerBtn(false), textDecoration: 'none' }}>
-            Аналитика
-          </Link>
-        </div>
-      </header>
-
-      <div style={{ display: 'flex', height: 'calc(100vh - 56px)' }}>
+      <div style={{ display: 'flex', height: 'calc(100dvh - 52px)' }}>
         {/* ── Columns ── */}
-        <main style={{ flex: 1, padding: '24px', overflow: 'auto' }}>
+        <main style={{ flex: 1, padding: isMobile ? '16px 12px' : '24px', overflow: 'auto' }}>
           {loading ? (
             <div style={{ textAlign: 'center', padding: '80px', color: '#9ca3af' }}>Загрузка...</div>
           ) : (
-            <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', gap: isMobile ? '12px' : '20px', alignItems: 'flex-start' }}>
               {COLUMNS.map((col) => {
                 const colTasks = tasks.filter((t) => t.status === col.id);
                 return (
@@ -187,7 +187,9 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
                         (e.currentTarget as HTMLElement).style.borderColor = 'transparent';
                     }}
                     style={{
-                      flex: '0 0 290px', width: '290px', maxWidth: '290px',
+                      flex: isMobile ? '0 0 min(82vw, 300px)' : '0 0 290px',
+                      width: isMobile ? 'min(82vw, 300px)' : '290px',
+                      maxWidth: isMobile ? 'min(82vw, 300px)' : '290px',
                       backgroundColor: '#eef0f5', overflow: 'hidden',
                       borderRadius: '14px', padding: '16px',
                       minHeight: '200px', border: '2px dashed transparent',
@@ -325,9 +327,20 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
           )}
         </main>
 
-        {/* ── Activity panel ── */}
+        {/* ── Activity panel (на телефоне — выезжающая панель поверх) ── */}
+        {showActivity && isMobile && (
+          <div
+            onClick={() => setShowActivity(false)}
+            style={{ position: 'fixed', inset: 0, top: '52px', backgroundColor: 'rgba(0,0,0,0.3)', zIndex: 49 }}
+          />
+        )}
         {showActivity && (
-          <aside style={{
+          <aside style={isMobile ? {
+            position: 'fixed', top: '52px', right: 0, bottom: 0,
+            width: 'min(85vw, 320px)', borderLeft: '1px solid #e5e7eb',
+            backgroundColor: 'white', padding: '20px', overflow: 'auto',
+            zIndex: 50, boxShadow: '-4px 0 24px rgba(0,0,0,0.18)',
+          } : {
             width: '300px', borderLeft: '1px solid #e5e7eb',
             backgroundColor: 'white', padding: '20px',
             overflow: 'auto', flexShrink: 0,
@@ -377,19 +390,12 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
   );
 }
 
-const navLink: React.CSSProperties = {
-  textDecoration: 'none', color: '#6b7280', fontSize: '14px',
-};
-
-function headerBtn(active: boolean): React.CSSProperties {
+function headerBtn(active: boolean, compact = false): React.CSSProperties {
   return {
-    padding: '7px 14px', border: '1.5px solid #e5e7eb', borderRadius: '8px',
-    background: active ? '#ede9fe' : 'white', cursor: 'pointer',
-    fontSize: '13px', color: active ? '#4f46e5' : '#555',
-    fontWeight: active ? 700 : 400,
+    padding: compact ? '8px' : '6px 11px', border: `1px solid ${active ? '#c7d2fe' : '#e5e7eb'}`, borderRadius: '7px',
+    background: active ? '#eef2ff' : 'white', cursor: 'pointer',
+    fontSize: '13px', color: active ? '#4f46e5' : '#374151',
+    fontWeight: active ? 700 : 400, lineHeight: 1, flexShrink: 0,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
   };
-}
-
-function Divider() {
-  return <span style={{ color: '#e5e7eb', fontSize: '18px', userSelect: 'none' }}>|</span>;
 }

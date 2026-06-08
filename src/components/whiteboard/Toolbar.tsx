@@ -7,6 +7,10 @@ interface ToolbarProps {
   tool: Tool;
   onToolChange(t: Tool): void;
   onImageUpload(e: React.ChangeEvent<HTMLInputElement>): void;
+  /** Горизонтальная раскладка — нижняя панель на телефонах. */
+  horizontal?: boolean;
+  /** Если задано (мобильная раскладка) — показываем кнопку открытия свойств. */
+  onOpenProperties?(): void;
 }
 
 interface ToolDef {
@@ -153,12 +157,27 @@ const TOOLS: ToolDef[] = [
 
 const DIVIDER_AFTER: Tool[] = ['pan', 'pencil', 'arrow', 'sticker'];
 
-export default function Toolbar({ tool, onToolChange, onImageUpload }: ToolbarProps) {
+export default function Toolbar({ tool, onToolChange, onImageUpload, horizontal = false, onOpenProperties }: ToolbarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div
-      style={{
+      style={horizontal ? {
+        height: '56px',
+        width: '100%',
+        backgroundColor: 'white',
+        borderTop: '1px solid #e5e7eb',
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: '0 8px',
+        gap: '2px',
+        userSelect: 'none',
+        overflowX: 'auto',
+        overflowY: 'hidden',
+        flexShrink: 0,
+        boxShadow: '0 -2px 8px rgba(0,0,0,0.04)',
+      } : {
         width: '56px',
         backgroundColor: 'white',
         borderRight: '1px solid #e5e7eb',
@@ -177,7 +196,7 @@ export default function Toolbar({ tool, onToolChange, onImageUpload }: ToolbarPr
         const isActive = tool === t.id;
         return (
           <React.Fragment key={t.id}>
-            <div style={{ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center' }}>
+            <div style={{ position: 'relative', width: horizontal ? 'auto' : '100%', flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
               <button
                 onClick={() => {
                   if (t.id === 'image') {
@@ -220,10 +239,11 @@ export default function Toolbar({ tool, onToolChange, onImageUpload }: ToolbarPr
             </div>
             {DIVIDER_AFTER.includes(t.id) && (
               <div
-                style={{
-                  width: '32px',
-                  height: '1px',
-                  backgroundColor: '#e5e7eb',
+                style={horizontal ? {
+                  width: '1px', height: '32px', backgroundColor: '#e5e7eb',
+                  margin: '0 4px', flexShrink: 0,
+                } : {
+                  width: '32px', height: '1px', backgroundColor: '#e5e7eb',
                   margin: '4px 0',
                 }}
               />
@@ -231,6 +251,32 @@ export default function Toolbar({ tool, onToolChange, onImageUpload }: ToolbarPr
           </React.Fragment>
         );
       })}
+
+      {/* Кнопка открытия панели свойств — только в мобильной (горизонтальной) раскладке */}
+      {horizontal && onOpenProperties && (
+        <>
+          <div style={{ width: '1px', height: '32px', backgroundColor: '#e5e7eb', margin: '0 4px', flexShrink: 0 }} />
+          <div style={{ position: 'relative', flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
+            <button
+              onClick={onOpenProperties}
+              title="Свойства"
+              style={{
+                width: '40px', height: '40px', display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                borderRadius: '8px', border: 'none', cursor: 'pointer',
+                backgroundColor: 'transparent', color: '#555',
+              }}
+            >
+              <IC>
+                <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" />
+                <line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" />
+                <line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" />
+              </IC>
+            </button>
+          </div>
+        </>
+      )}
 
       <input
         ref={fileInputRef}

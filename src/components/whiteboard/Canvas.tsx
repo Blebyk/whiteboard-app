@@ -367,6 +367,12 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
       fm.current = fab;
       const container = containerRef.current!;
 
+      // Координаты указателя из mouse- или touch-события (для панорамы пальцем).
+      const pointerXY = (e: any): { x: number; y: number } => {
+        const t = e?.touches?.[0] || e?.changedTouches?.[0];
+        return t ? { x: t.clientX, y: t.clientY } : { x: e.clientX, y: e.clientY };
+      };
+
       // Уничтожаем остатки инстанса Fabric на этом элементе (безопасность HMR)
       if (fc.current) {
         try { fc.current.dispose(); } catch (_) {}
@@ -606,7 +612,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
 
         if (tool === 'pan') {
           panning.current = true;
-          panStart.current = { x: opt.e.clientX, y: opt.e.clientY };
+          panStart.current = pointerXY(opt.e);
           canvas.defaultCursor = 'grabbing';
           return;
         }
@@ -744,9 +750,10 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas(props, ref) {
 
         if (tool === 'pan' && panning.current) {
           const vpt = canvas.viewportTransform as number[];
-          vpt[4] += opt.e.clientX - panStart.current.x;
-          vpt[5] += opt.e.clientY - panStart.current.y;
-          panStart.current = { x: opt.e.clientX, y: opt.e.clientY };
+          const { x, y } = pointerXY(opt.e);
+          vpt[4] += x - panStart.current.x;
+          vpt[5] += y - panStart.current.y;
+          panStart.current = { x, y };
           canvas.requestRenderAll();
           return;
         }

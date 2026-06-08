@@ -14,6 +14,9 @@ interface Props {
   bgStyle: 'none' | 'grid' | 'dots';
   hasSelection: boolean;
   isStickerSelected?: boolean;
+  /** Мобильная раскладка: панель показывается как нижний лист (bottom sheet). */
+  mobile?: boolean;
+  onClose?(): void;
   onStrokeColorChange(c: string): void;
   onFillColorChange(c: string): void;
   onStrokeWidthChange(n: number): void;
@@ -94,6 +97,8 @@ export default function PropertiesPanel({
   bgStyle,
   hasSelection,
   isStickerSelected = false,
+  mobile = false,
+  onClose,
   onStrokeColorChange,
   onFillColorChange,
   onStrokeWidthChange,
@@ -113,20 +118,48 @@ export default function PropertiesPanel({
   const showFont = SHOW_FONT_TOOLS.includes(tool);
   const showStroke = tool !== 'image' && tool !== 'pan' && tool !== 'select' && tool !== 'sticker' && !isStickerSelected;
 
+  const panelStyle: React.CSSProperties = mobile ? {
+    position: 'fixed', left: 0, right: 0, bottom: 0,
+    backgroundColor: 'white',
+    borderTopLeftRadius: 16, borderTopRightRadius: 16,
+    padding: '8px 16px calc(16px + env(safe-area-inset-bottom))',
+    maxHeight: '72vh', overflowY: 'auto', zIndex: 1101,
+    fontSize: '13px', color: '#374151',
+    boxShadow: '0 -8px 30px rgba(0,0,0,0.18)',
+  } : {
+    width: '200px',
+    backgroundColor: 'white',
+    borderLeft: '1px solid #e5e7eb',
+    padding: '16px 14px',
+    overflowY: 'auto',
+    flexShrink: 0,
+    fontSize: '13px',
+    color: '#374151',
+    boxShadow: '-2px 0 8px rgba(0,0,0,0.04)',
+  };
+
   return (
-    <div
-      style={{
-        width: '200px',
-        backgroundColor: 'white',
-        borderLeft: '1px solid #e5e7eb',
-        padding: '16px 14px',
-        overflowY: 'auto',
-        flexShrink: 0,
-        fontSize: '13px',
-        color: '#374151',
-        boxShadow: '-2px 0 8px rgba(0,0,0,0.04)',
-      }}
-    >
+    <>
+      {mobile && (
+        <div
+          onClick={onClose}
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.35)', zIndex: 1100 }}
+        />
+      )}
+      <div style={panelStyle}>
+      {mobile && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          marginBottom: 14, position: 'sticky', top: 0, backgroundColor: 'white', paddingTop: 4,
+        }}>
+          <span style={{ fontSize: 15, fontWeight: 800, color: '#1a1a2e' }}>Свойства</span>
+          <button
+            onClick={onClose}
+            aria-label="Закрыть"
+            style={{ border: 'none', background: 'none', fontSize: 26, lineHeight: 1, color: '#9ca3af', cursor: 'pointer', padding: '0 4px' }}
+          >×</button>
+        </div>
+      )}
       {/* ── Sticker color palette ── */}
       {showStickerPalette && (
         <Section title="Цвет стикера">
@@ -302,27 +335,30 @@ export default function PropertiesPanel({
         </Section>
       )}
 
-      {/* ── Keyboard hints ── */}
-      <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '12px', marginTop: '4px' }}>
-        <p style={{ margin: '0 0 8px', fontSize: '10px', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          Горячие клавиши
-        </p>
-        {[
-          ['V', 'Выбор'], ['H', 'Рука'], ['P', 'Карандаш'],
-          ['R', 'Прямоугольник'], ['O', 'Эллипс'], ['T', 'Треугольник'],
-          ['D', 'Ромб'], ['L', 'Линия'], ['A', 'Стрелка'],
-          ['X', 'Текст'], ['N', 'Стикер'], ['E', 'Ластик'], ['I', 'Изображение'],
-          ['Ctrl+Z', 'Отмена'], ['Ctrl+Y', 'Повтор'], ['Del', 'Удалить'],
-        ].map(([k, label]) => (
-          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-            <kbd style={{
-              fontSize: '10px', backgroundColor: '#f3f4f6', border: '1px solid #e5e7eb',
-              borderRadius: '4px', padding: '1px 5px', color: '#555',
-            }}>{k}</kbd>
-            <span style={{ fontSize: '10px', color: '#9ca3af' }}>{label}</span>
-          </div>
-        ))}
+      {/* ── Keyboard hints (только на десктопе — на телефоне клавиатуры нет) ── */}
+      {!mobile && (
+        <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '12px', marginTop: '4px' }}>
+          <p style={{ margin: '0 0 8px', fontSize: '10px', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Горячие клавиши
+          </p>
+          {[
+            ['V', 'Выбор'], ['H', 'Рука'], ['P', 'Карандаш'],
+            ['R', 'Прямоугольник'], ['O', 'Эллипс'], ['T', 'Треугольник'],
+            ['D', 'Ромб'], ['L', 'Линия'], ['A', 'Стрелка'],
+            ['X', 'Текст'], ['N', 'Стикер'], ['E', 'Ластик'], ['I', 'Изображение'],
+            ['Ctrl+Z', 'Отмена'], ['Ctrl+Y', 'Повтор'], ['Del', 'Удалить'],
+          ].map(([k, label]) => (
+            <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <kbd style={{
+                fontSize: '10px', backgroundColor: '#f3f4f6', border: '1px solid #e5e7eb',
+                borderRadius: '4px', padding: '1px 5px', color: '#555',
+              }}>{k}</kbd>
+              <span style={{ fontSize: '10px', color: '#9ca3af' }}>{label}</span>
+            </div>
+          ))}
+        </div>
+      )}
       </div>
-    </div>
+    </>
   );
 }

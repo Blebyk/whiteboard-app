@@ -20,5 +20,21 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
 
   if (!board) redirect('/dashboard');
 
-  return <AnalyticsDashboard boardId={boardId} />;
+  const isOwner = board.userId === user.id;
+  let canEdit = isOwner;
+  if (!isOwner) {
+    const share = db.prepare('SELECT role FROM board_shares WHERE boardId = ? AND userId = ?')
+      .get(boardId, user.id) as any;
+    canEdit = share?.role === 'editor';
+  }
+
+  return (
+    <AnalyticsDashboard
+      boardId={boardId}
+      boardName={board.name}
+      isOwner={isOwner}
+      canEdit={canEdit}
+      currentUserId={user.id}
+    />
+  );
 }

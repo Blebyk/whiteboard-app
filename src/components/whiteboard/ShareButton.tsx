@@ -14,6 +14,8 @@ interface SharedUser {
 
 interface ShareButtonProps {
   boardId: number;
+  /** На мобильных — только иконка, без подписи «Поделиться». */
+  compact?: boolean;
 }
 
 const ROLE_LABEL: Record<Role, string> = { editor: 'Редактор', viewer: 'Зритель' };
@@ -22,7 +24,7 @@ const ROLE_COLOR: Record<Role, { bg: string; text: string }> = {
   viewer: { bg: '#f3f4f6', text: '#6b7280' },
 };
 
-export default function ShareButton({ boardId }: ShareButtonProps) {
+export default function ShareButton({ boardId, compact = false }: ShareButtonProps) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<Role>('editor');
@@ -111,26 +113,26 @@ export default function ShareButton({ boardId }: ShareButtonProps) {
         onClick={() => setOpen((v) => !v)}
         title="Поделиться доской"
         style={{
-          padding: '6px 14px', borderRadius: 7,
+          padding: compact ? '7px 9px' : '6px 14px', borderRadius: 7,
           border: '1px solid #4f46e5',
           backgroundColor: open ? '#eef2ff' : '#4f46e5',
           color: open ? '#4f46e5' : '#ffffff',
           cursor: 'pointer', fontSize: 13, fontWeight: 600,
-          display: 'flex', alignItems: 'center', gap: 6,
-          transition: 'all 0.15s', lineHeight: 1, fontFamily: 'inherit',
+          display: 'flex', alignItems: 'center', gap: compact ? 0 : 6,
+          transition: 'all 0.15s', lineHeight: 1, fontFamily: 'inherit', flexShrink: 0,
         }}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
           <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
         </svg>
-        Поделиться
+        {!compact && 'Поделиться'}
       </button>
 
       {open && (
         <div style={{
           position: 'absolute', right: 0, top: 'calc(100% + 8px)',
-          width: 360, backgroundColor: 'white',
+          width: 'min(360px, calc(100vw - 24px))', backgroundColor: 'white',
           border: '1px solid #e5e7eb', borderRadius: 12,
           boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: 16, zIndex: 200,
         }}>

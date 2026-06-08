@@ -4,7 +4,9 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import ShareButton from './ShareButton';
 import PresenceAvatars from './PresenceAvatars';
+import BoardModeNav from '../shared/BoardModeNav';
 import type { PresenceUser } from '@/lib/boardPresence';
+import { useIsMobile } from '@/lib/useIsMobile';
 
 interface TopBarProps {
   boardId: number;
@@ -118,6 +120,7 @@ export default function TopBar({
   const [menuOpen, setMenuOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => setNameVal(boardName), [boardName]);
 
@@ -151,6 +154,118 @@ export default function TopBar({
 
   const saveColor =
     saveStatus === 'saving' ? '#6b7280' : saveStatus === 'saved' ? '#16a34a' : '#d97706';
+
+  // ─── Компактная шапка для телефонов ──────────────────────────────────────
+  if (isMobile) {
+    const modeLinks: { label: string; href: string; active?: boolean }[] = [
+      { label: 'Доска', href: `/board/${boardId}`, active: true },
+      { label: 'Канбан', href: `/board/${boardId}/kanban` },
+      { label: 'Аналитика', href: `/board/${boardId}/analytics` },
+    ];
+    const mItem: React.CSSProperties = {
+      display: 'block', width: '100%', textAlign: 'left',
+      padding: '10px 14px', border: 'none', background: 'none',
+      cursor: 'pointer', fontSize: '14px', color: '#333',
+      borderRadius: '7px', textDecoration: 'none',
+    };
+    return (
+      <header style={{
+        height: '52px', backgroundColor: 'white', borderBottom: '1px solid #e5e7eb',
+        display: 'flex', alignItems: 'center', padding: '0 8px', gap: '6px',
+        flexShrink: 0, zIndex: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+      }}>
+        <Link href="/dashboard" title="На дашборд" style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: '34px', height: '34px', borderRadius: '8px', flexShrink: 0,
+          border: '1px solid #e5e7eb', color: '#555', textDecoration: 'none', fontSize: '16px',
+        }}>←</Link>
+
+        {canEdit && editing ? (
+          <input
+            ref={inputRef}
+            value={nameVal}
+            onChange={(e) => setNameVal(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitRename();
+              if (e.key === 'Escape') { setEditing(false); setNameVal(boardName); }
+            }}
+            style={{
+              flex: 1, minWidth: 0, fontSize: '15px', fontWeight: 700, color: '#1a1a2e',
+              border: '2px solid #6366f1', borderRadius: '6px', padding: '4px 8px', outline: 'none',
+            }}
+          />
+        ) : canEdit ? (
+          <button onClick={() => setEditing(true)} title="Переименовать" style={{
+            flex: 1, minWidth: 0, textAlign: 'left', fontSize: '15px', fontWeight: 700, color: '#1a1a2e',
+            background: 'none', border: 'none', cursor: 'text', padding: '3px 4px',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>{nameVal}</button>
+        ) : (
+          <span style={{
+            flex: 1, minWidth: 0, fontSize: '15px', fontWeight: 700, color: '#1a1a2e', padding: '3px 4px',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>{nameVal}</span>
+        )}
+
+        {canEdit ? (
+          <span title={saveLabel} style={{
+            width: 9, height: 9, borderRadius: '50%', backgroundColor: saveColor, flexShrink: 0,
+          }} />
+        ) : (
+          <span style={{
+            fontSize: '10px', fontWeight: 600, color: '#6b7280',
+            backgroundColor: '#f3f4f6', border: '1px solid #e5e7eb',
+            borderRadius: '5px', padding: '2px 6px', flexShrink: 0, whiteSpace: 'nowrap',
+          }}>Просмотр</span>
+        )}
+
+        {canEdit && (
+          <>
+            <Btn onClick={onUndo} disabled={!canUndo} title="Отменить (Ctrl+Z)">
+              <IC d={<><polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 0 0-4-4H4" /></>} />
+            </Btn>
+            <Btn onClick={onRedo} disabled={!canRedo} title="Повторить (Ctrl+Y)">
+              <IC d={<><polyline points="15 14 20 9 15 4" /><path d="M4 20v-7a4 4 0 0 1 4-4h12" /></>} />
+            </Btn>
+          </>
+        )}
+
+        {isOwner && <ShareButton boardId={boardId} compact />}
+
+        <div style={{ position: 'relative', flexShrink: 0 }} ref={menuRef}>
+          <Btn onClick={() => setMenuOpen((v) => !v)} title="Меню">
+            <IC d={<><circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" /></>} />
+          </Btn>
+          {menuOpen && (
+            <div style={{
+              position: 'absolute', right: 0, top: '110%', backgroundColor: 'white',
+              border: '1px solid #e5e7eb', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+              zIndex: 100, minWidth: '200px', overflow: 'hidden', padding: '4px',
+            }}>
+              <div style={{ padding: '4px 10px', fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Режим</div>
+              {modeLinks.map((m) => (
+                <Link key={m.href} href={m.href} onClick={() => setMenuOpen(false)} style={{
+                  ...mItem,
+                  backgroundColor: m.active ? '#eef2ff' : undefined,
+                  color: m.active ? '#4f46e5' : '#333',
+                  fontWeight: m.active ? 700 : 400,
+                }}>{m.label}</Link>
+              ))}
+              <div style={{ height: 1, background: '#f3f4f6', margin: '4px 0' }} />
+              {canEdit && (
+                <button onClick={() => { onSave(); setMenuOpen(false); }} style={mItem}>Сохранить</button>
+              )}
+              <button onClick={() => { onExportPNG(); setMenuOpen(false); }} style={mItem}>Экспорт PNG</button>
+              {canEdit && (
+                <button onClick={() => { if (confirm('Очистить всё содержимое доски?')) onClear(); setMenuOpen(false); }} style={{ ...mItem, color: '#dc2626' }}>Очистить доску</button>
+              )}
+            </div>
+          )}
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header
@@ -280,38 +395,9 @@ export default function TopBar({
           )}
         </>}
 
-        {/* Навигация к другим режимам */}
+        {/* Навигация по режимам (Доска / Канбан / Аналитика) */}
         <div style={{ width: '1px', height: '20px', backgroundColor: '#e5e7eb', margin: '0 2px' }} />
-        <Link
-          href={`/board/${boardId}/kanban`}
-          title="Канбан-доска задач"
-          style={{
-            padding: '6px 11px', borderRadius: '7px', border: '1px solid #e5e7eb',
-            backgroundColor: 'white', fontSize: '13px', color: '#374151',
-            textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '5px',
-            transition: 'background 0.15s',
-          }}
-          onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = '#f5f5f5')}
-          onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'white')}
-        >
-          <IC d={<><rect x="3" y="3" width="7" height="18" rx="1" /><rect x="14" y="3" width="7" height="10" rx="1" /><rect x="14" y="17" width="7" height="4" rx="1" /></>} />
-          Канбан
-        </Link>
-        <Link
-          href={`/board/${boardId}/analytics`}
-          title="Аналитика"
-          style={{
-            padding: '6px 11px', borderRadius: '7px', border: '1px solid #e5e7eb',
-            backgroundColor: 'white', fontSize: '13px', color: '#374151',
-            textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '5px',
-            transition: 'background 0.15s',
-          }}
-          onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = '#f5f5f5')}
-          onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'white')}
-        >
-          <IC d={<><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></>} />
-          Аналитика
-        </Link>
+        <BoardModeNav boardId={boardId} active="board" />
       </div>
 
       {/* ── Справа: зум + действия ── */}

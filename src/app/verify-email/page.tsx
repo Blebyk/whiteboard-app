@@ -41,13 +41,15 @@ function VerifyEmailContent() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
+      padding: '20px',
       backgroundColor: '#f5f5f5'
     }}>
       <div style={{
         backgroundColor: 'white',
-        padding: '40px',
+        padding: 'clamp(24px, 5vw, 40px)',
         borderRadius: '12px',
         boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+        width: '100%',
         maxWidth: '500px',
         textAlign: 'center'
       }}>
@@ -108,13 +110,15 @@ export default function VerifyEmailPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        padding: '20px',
         backgroundColor: '#f5f5f5'
       }}>
         <div style={{
           backgroundColor: 'white',
-          padding: '40px',
+          padding: 'clamp(24px, 5vw, 40px)',
           borderRadius: '12px',
           boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+          width: '100%',
           maxWidth: '500px',
           textAlign: 'center'
         }}>

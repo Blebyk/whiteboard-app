@@ -27,6 +27,18 @@ body {
   box-sizing: border-box;
 }
 
+/* Убираем серую вспышку при тапе по интерактивным элементам на мобильных */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Страховка от горизонтального скролла из-за случайного переполнения.
+   `clip` (в отличие от `hidden`) не создаёт контейнер прокрутки, поэтому
+   position: sticky в шапках продолжает работать. */
+html {
+  overflow-x: clip;
+}
+
 /* Prevent text selection while drawing */
 .no-select {
   user-select: none;
@@ -36,4 +48,20 @@ body {
 /* Fabric.js canvas wrapper */
 canvas {
   display: block;
+}
+
+/* Высота на весь экран с учётом мобильных адресных строк (dvh с фолбэком). */
+.app-viewport {
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* На телефонах поля ввода с размером шрифта < 16px заставляют iOS Safari
+   увеличивать страницу при фокусе. Принудительно делаем 16px на мобильных. */
+@media (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }

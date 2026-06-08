@@ -113,7 +113,7 @@ export default function DashboardClient({ user }: { user: User }) {
       <header style={{
         backgroundColor: 'white',
         borderBottom: '1px solid #e5e7eb',
-        padding: '0 32px',
+        padding: '0 clamp(16px, 4vw, 32px)',
         height: '60px',
         display: 'flex',
         alignItems: 'center',
@@ -148,9 +148,9 @@ export default function DashboardClient({ user }: { user: User }) {
       </header>
 
       {/* Основное */}
-      <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 32px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
-          <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 800, color: '#1a1a2e' }}>
+      <main style={{ maxWidth: '1200px', margin: '0 auto', padding: 'clamp(24px, 4vw, 40px) clamp(16px, 4vw, 32px)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '32px' }}>
+          <h1 style={{ margin: 0, fontSize: 'clamp(22px, 5vw, 28px)', fontWeight: 800, color: '#1a1a2e' }}>
             Мои доски
           </h1>
           <button
@@ -216,7 +216,7 @@ export default function DashboardClient({ user }: { user: User }) {
         ) : (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 240px), 1fr))',
             gap: '20px',
           }}>
             {/* Карточка новой доски */}

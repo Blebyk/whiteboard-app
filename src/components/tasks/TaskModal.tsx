@@ -40,6 +40,7 @@ interface Props {
   task?: Task;
   members: Member[];
   canEdit: boolean;
+  currentUserId?: number;
   onSave(task: Task): void;
   onClose(): void;
 }
@@ -123,7 +124,7 @@ export default function TaskModal({
       <div style={{
         backgroundColor: 'white', borderRadius: '16px',
         width: '100%', maxWidth: '580px', maxHeight: '90vh',
-        overflow: 'auto', padding: '28px',
+        overflow: 'auto', padding: 'clamp(20px, 4vw, 28px)',
         boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
       }}>
         {/* Header */}

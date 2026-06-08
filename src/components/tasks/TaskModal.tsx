@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import DatePicker from './DatePicker';
 
 export interface Task {
   id: number;
@@ -209,12 +210,10 @@ export default function TaskModal({
             </div>
             <div>
               <label style={labelStyle}>Дедлайн</label>
-              <input
-                type="date"
+              <DatePicker
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                onChange={setDueDate}
                 disabled={!canEdit}
-                style={inputStyle(canEdit)}
               />
             </div>
           </div>

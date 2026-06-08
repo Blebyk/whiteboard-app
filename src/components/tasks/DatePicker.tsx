@@ -36,9 +36,11 @@ export default function DatePicker({ value, onChange, disabled }: Props) {
   const initMonth = value ? parseInt(value.split('-')[1]) - 1 : new Date().getMonth();
 
   const [open, setOpen]           = useState(false);
+  const [dropUp, setDropUp]       = useState(false);
   const [viewYear, setViewYear]   = useState(initYear);
   const [viewMonth, setViewMonth] = useState(initMonth);
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef   = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (value) {
@@ -55,6 +57,16 @@ export default function DatePicker({ value, onChange, disabled }: Props) {
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
+
+  function handleToggle() {
+    if (disabled) return;
+    if (!open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      // Высота дропдауна ~320px; если снизу меньше — открываем вверх
+      setDropUp(window.innerHeight - rect.bottom < 340);
+    }
+    setOpen((o) => !o);
+  }
 
   function prevMonth() {
     if (viewMonth === 0) { setViewMonth(11); setViewYear((y) => y - 1); }
@@ -79,7 +91,8 @@ export default function DatePicker({ value, onChange, disabled }: Props) {
     <div ref={containerRef} style={{ position: 'relative', fontFamily: 'Arial, sans-serif' }}>
       {/* ── Trigger ── */}
       <div
-        onClick={() => !disabled && setOpen((o) => !o)}
+        ref={triggerRef}
+        onClick={handleToggle}
         style={{
           width: '100%', padding: '10px 12px',
           border: `1.5px solid ${open ? '#6366f1' : '#e5e7eb'}`,
@@ -107,7 +120,10 @@ export default function DatePicker({ value, onChange, disabled }: Props) {
       {/* ── Calendar dropdown ── */}
       {open && !disabled && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 500,
+          position: 'absolute',
+          top:    dropUp ? 'auto' : 'calc(100% + 6px)',
+          bottom: dropUp ? 'calc(100% + 6px)' : 'auto',
+          left: 0, zIndex: 500,
           backgroundColor: 'white', border: '1.5px solid #e5e7eb',
           borderRadius: '14px', boxShadow: '0 8px 32px rgba(0,0,0,0.13)',
           padding: '16px', width: '264px',

@@ -172,10 +172,11 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
                         (e.currentTarget as HTMLElement).style.borderColor = 'transparent';
                     }}
                     style={{
-                      flex: '0 0 290px', backgroundColor: '#eef0f5',
+                      flex: '0 0 290px', width: '290px', maxWidth: '290px',
+                      backgroundColor: '#eef0f5', overflow: 'hidden',
                       borderRadius: '14px', padding: '16px',
                       minHeight: '200px', border: '2px dashed transparent',
-                      transition: 'border-color 0.2s',
+                      transition: 'border-color 0.2s', boxSizing: 'border-box',
                     }}
                   >
                     {/* Column header */}
@@ -222,6 +223,7 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
                             border: `2px solid ${draggedId === task.id ? col.color : 'transparent'}`,
                             opacity: draggedId === task.id ? 0.5 : 1,
                             transition: 'box-shadow 0.15s',
+                            overflow: 'hidden', minWidth: 0,
                           }}
                           onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.boxShadow = '0 4px 14px rgba(0,0,0,0.11)')}
                           onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.boxShadow = '0 1px 4px rgba(0,0,0,0.07)')}
@@ -246,7 +248,11 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
                             )}
                           </div>
 
-                          <p style={{ margin: '0 0 6px', fontSize: '14px', fontWeight: 600, color: '#1a1a2e', lineHeight: 1.4 }}>
+                          <p style={{
+                            margin: '0 0 6px', fontSize: '14px', fontWeight: 600,
+                            color: '#1a1a2e', lineHeight: 1.4,
+                            overflowWrap: 'break-word', wordBreak: 'break-word',
+                          }}>
                             {task.title}
                           </p>
 
@@ -254,6 +260,7 @@ export default function KanbanBoard({ boardId, boardName, canEdit, currentUserId
                             <p style={{
                               margin: '0 0 8px', fontSize: '12px', color: '#6b7280',
                               lineHeight: 1.4, overflow: 'hidden', maxHeight: '36px',
+                              overflowWrap: 'break-word', wordBreak: 'break-word',
                             }}>
                               {task.description}
                             </p>

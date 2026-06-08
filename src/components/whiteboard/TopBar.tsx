@@ -261,7 +261,7 @@ export default function TopBar({
         )}
       </div>
 
-      {/* ── Центр: отмена / повтор + удалить (только редакторы) ── */}
+      {/* ── Центр: отмена / повтор + навигация ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, justifyContent: 'center' }}>
         {canEdit && <>
           <Btn onClick={onUndo} disabled={!canUndo} title="Отменить (Ctrl+Z)">
@@ -279,6 +279,39 @@ export default function TopBar({
             </Btn>
           )}
         </>}
+
+        {/* Навигация к другим режимам */}
+        <div style={{ width: '1px', height: '20px', backgroundColor: '#e5e7eb', margin: '0 2px' }} />
+        <Link
+          href={`/board/${boardId}/kanban`}
+          title="Канбан-доска задач"
+          style={{
+            padding: '6px 11px', borderRadius: '7px', border: '1px solid #e5e7eb',
+            backgroundColor: 'white', fontSize: '13px', color: '#374151',
+            textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '5px',
+            transition: 'background 0.15s',
+          }}
+          onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = '#f5f5f5')}
+          onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'white')}
+        >
+          <IC d={<><rect x="3" y="3" width="7" height="18" rx="1" /><rect x="14" y="3" width="7" height="10" rx="1" /><rect x="14" y="17" width="7" height="4" rx="1" /></>} />
+          Канбан
+        </Link>
+        <Link
+          href={`/board/${boardId}/analytics`}
+          title="Аналитика"
+          style={{
+            padding: '6px 11px', borderRadius: '7px', border: '1px solid #e5e7eb',
+            backgroundColor: 'white', fontSize: '13px', color: '#374151',
+            textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '5px',
+            transition: 'background 0.15s',
+          }}
+          onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = '#f5f5f5')}
+          onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'white')}
+        >
+          <IC d={<><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></>} />
+          Аналитика
+        </Link>
       </div>
 
       {/* ── Справа: зум + действия ── */}

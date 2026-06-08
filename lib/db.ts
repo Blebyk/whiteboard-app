@@ -100,6 +100,45 @@ function init(): Database.Database {
       FOREIGN KEY (boardId) REFERENCES boards(id) ON DELETE CASCADE
     );
     CREATE INDEX IF NOT EXISTS idx_board_objects_rev ON board_objects(boardId, rev);
+
+    CREATE TABLE IF NOT EXISTS tasks (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      boardId     INTEGER NOT NULL,
+      title       TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      status      TEXT NOT NULL DEFAULT 'todo',
+      priority    TEXT NOT NULL DEFAULT 'medium',
+      assignee_id INTEGER,
+      due_date    TEXT,
+      created_by  INTEGER NOT NULL,
+      position    INTEGER NOT NULL DEFAULT 0,
+      created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (boardId) REFERENCES boards(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_tasks_board ON tasks(boardId, status);
+
+    CREATE TABLE IF NOT EXISTS task_comments (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      taskId     INTEGER NOT NULL,
+      userId     INTEGER NOT NULL,
+      content    TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (taskId) REFERENCES tasks(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS activity_log (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      boardId    INTEGER NOT NULL,
+      taskId     INTEGER,
+      userId     INTEGER NOT NULL,
+      userName   TEXT NOT NULL,
+      action     TEXT NOT NULL,
+      details    TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (boardId) REFERENCES boards(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_activity_board ON activity_log(boardId, created_at);
   `);
 
   return db;

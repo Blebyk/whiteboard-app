@@ -1,8 +1,5 @@
 # Whiteboard App
 
-Веб-приложение для работы на виртуальной доской, вдохновлённое Miro, FigJam и Excalidraw.
-
----
 
 ## Стек технологий
 
@@ -75,6 +72,23 @@
 * Пользователь, которому выдали доступ, может убрать доску у себя, не удаляя её для остальных.
 * На дашборде шареные доски помечаются бейджем **«ПОДЕЛЕНО»**.
 
+### Управление задачами
+
+* **Канбан-доска** (`/board/[id]/kanban`) — три колонки: *К выполнению*, *В работе*, *Готово*.
+* Задачи перемещаются между колонками перетаскиванием (HTML5 Drag & Drop).
+* Каждая задача содержит: название, описание, статус, приоритет (низкий / средний / высокий), исполнитель, дедлайн.
+* Просроченные задачи выделяются красным с иконкой предупреждения.
+* **Модальное окно задачи** — создание и редактирование, раздел комментариев с лентой обсуждения.
+* **Лог активности** — боковая панель с хронологией событий: создание, смена статуса, удаление задач и добавление комментариев.
+* **Аналитика** (`/board/[id]/analytics`):
+  * Сводные карточки: всего задач, выполнено, просрочено, процент выполнения.
+  * Горизонтальные бар-чарты по статусу и приоритету.
+  * График создания задач за последние 7 дней.
+  * Распределение задач по исполнителям.
+  * Лента последней активности.
+* С Канбан-доски и из Аналитики есть навигация обратно на Whiteboard.
+* Из TopBar Whiteboard доступны прямые ссылки «Канбан» и «Аналитика».
+
 ### Дашборд
 
 * Список собственных и шареных досок.
@@ -116,10 +130,17 @@ whiteboard/
 │   │   │   │   └── [id]/
 │   │   │   │       ├── route.ts
 │   │   │   │       ├── share/route.ts
-│   │   │   │       └── sync/route.ts
+│   │   │   │       ├── sync/route.ts
+│   │   │   │       ├── tasks/route.ts
+│   │   │   │       ├── tasks/[taskId]/route.ts
+│   │   │   │       ├── tasks/[taskId]/comments/route.ts
+│   │   │   │       ├── activity/route.ts
+│   │   │   │       └── analytics/route.ts
 │   │   │   └── user/
 │   │   │       └── register/route.ts
 │   │   ├── board/[id]/page.tsx
+│   │   ├── board/[id]/kanban/page.tsx
+│   │   ├── board/[id]/analytics/page.tsx
 │   │   ├── dashboard/page.tsx
 │   │   ├── login/page.tsx
 │   │   ├── register/page.tsx
@@ -139,6 +160,11 @@ whiteboard/
 │   │   │   ├── PropertiesPanel.tsx
 │   │   │   ├── FloatingToolbar.tsx
 │   │   │   └── ColorPicker.tsx
+│   │   ├── tasks/
+│   │   │   ├── KanbanBoard.tsx
+│   │   │   └── TaskModal.tsx
+│   │   ├── analytics/
+│   │   │   └── AnalyticsDashboard.tsx
 │   │   └── dashboard/
 │   │       └── DashboardClient.tsx
 │   ├── lib/
@@ -218,6 +244,46 @@ whiteboard.db-wal
 | `created_at` | DATETIME   | Дата выдачи доступа     |
 
 `UNIQUE(boardId, userId)` не позволяет добавить одного пользователя к одной доске несколько раз.
+
+### Таблица `tasks`
+
+| Поле          | Тип        | Описание                              |
+| ------------- | ---------- | ------------------------------------- |
+| `id`          | INTEGER PK | ID задачи                             |
+| `boardId`     | INTEGER FK | Доска                                 |
+| `title`       | TEXT       | Название задачи                       |
+| `description` | TEXT       | Описание                              |
+| `status`      | TEXT       | `todo`, `inprogress` или `done`       |
+| `priority`    | TEXT       | `low`, `medium` или `high`            |
+| `assignee_id` | INTEGER FK | Исполнитель (пользователь)            |
+| `due_date`    | TEXT       | Дедлайн в формате `YYYY-MM-DD`        |
+| `created_by`  | INTEGER FK | Создатель задачи                      |
+| `position`    | INTEGER    | Порядок внутри колонки                |
+| `created_at`  | DATETIME   | Дата создания                         |
+| `updated_at`  | DATETIME   | Дата последнего обновления            |
+
+### Таблица `task_comments`
+
+| Поле         | Тип        | Описание             |
+| ------------ | ---------- | -------------------- |
+| `id`         | INTEGER PK | ID комментария       |
+| `taskId`     | INTEGER FK | Задача               |
+| `userId`     | INTEGER FK | Автор                |
+| `content`    | TEXT       | Текст комментария    |
+| `created_at` | DATETIME   | Дата создания        |
+
+### Таблица `activity_log`
+
+| Поле         | Тип        | Описание                                                       |
+| ------------ | ---------- | -------------------------------------------------------------- |
+| `id`         | INTEGER PK | ID записи                                                      |
+| `boardId`    | INTEGER FK | Доска                                                          |
+| `taskId`     | INTEGER    | Задача (может быть NULL при удалении)                          |
+| `userId`     | INTEGER FK | Пользователь                                                   |
+| `userName`   | TEXT       | Имя пользователя на момент события (сохраняется для истории)   |
+| `action`     | TEXT       | Тип события: `task_created`, `task_deleted`, `task_status_changed`, `comment_added` |
+| `details`    | TEXT       | JSON с подробностями события                                   |
+| `created_at` | DATETIME   | Дата события                                                   |
 
 ---
 
@@ -316,6 +382,21 @@ http://localhost:3000
 * `POST /api/boards/[id]/share` — выдать доступ по email.
 * `PATCH /api/boards/[id]/share` — изменить роль пользователя.
 * `DELETE /api/boards/[id]/share?userId=N` — забрать доступ.
+
+### Задачи
+
+* `GET /api/boards/[id]/tasks` — список задач доски + участники (для поля исполнитель).
+* `POST /api/boards/[id]/tasks` — создать задачу.
+* `GET /api/boards/[id]/tasks/[taskId]` — задача + комментарии.
+* `PUT /api/boards/[id]/tasks/[taskId]` — обновить задачу (статус, приоритет, исполнитель и др.).
+* `DELETE /api/boards/[id]/tasks/[taskId]` — удалить задачу.
+* `GET /api/boards/[id]/tasks/[taskId]/comments` — комментарии к задаче.
+* `POST /api/boards/[id]/tasks/[taskId]/comments` — добавить комментарий.
+
+### Аналитика и активность
+
+* `GET /api/boards/[id]/analytics` — агрегированная статистика: по статусам, приоритетам, исполнителям, за 7 дней, просроченные.
+* `GET /api/boards/[id]/activity` — последние 50 событий журнала активности.
 
 ### Аутентификация
 
